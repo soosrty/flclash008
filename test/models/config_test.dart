@@ -99,38 +99,73 @@ void main() {
       );
       expect(restored.onlyStatisticsProxy, false);
       expect(restored.autoLaunch, false);
+      expect(restored.highPriorityAutoLaunch, false);
       expect(restored.silentLaunch, false);
       expect(restored.autoRun, false);
       expect(restored.openLogs, false);
-      expect(restored.closeConnections, true);
+      expect(restored.closeConnections, false);
+      expect(restored.promptCloseConnections, true);
       expect(restored.isAnimateToPage, true);
+      expect(restored.isSwipeToPage, true);
       expect(restored.autoCheckUpdate, true);
+      expect(restored.ignoreCertificateErrors, false);
       expect(restored.showLabel, false);
       expect(restored.minimizeOnExit, true);
       expect(restored.restoreStrategy, RestoreStrategy.compatible);
       expect(restored.customUserAgent, '');
       expect(restored.testUrl, defaultTestUrl);
+      expect(
+        restored.foregroundTickerInterval,
+        defaultForegroundTickerInterval,
+      );
+      expect(restored.foregroundTickerIdleWhenUnfocused, true);
+      expect(
+        restored.foregroundTickerIdleInterval,
+        defaultForegroundTickerIdleInterval,
+      );
     });
 
     test('custom values survive round-trip', () {
       const props = AppSettingProps(
         locale: 'zh_CN',
+        dashboardWidgets: [
+          DashboardWidget.goroutineInfo,
+          DashboardWidget.connectionInfo,
+        ],
         onlyStatisticsProxy: true,
         autoLaunch: true,
+        highPriorityAutoLaunch: true,
         closeConnections: false,
+        promptCloseConnections: false,
+        isSwipeToPage: false,
+        ignoreCertificateErrors: true,
         testUrl: 'https://custom.test',
         customUserAgent: 'CustomUA/1.0',
+        foregroundTickerInterval: 3,
+        foregroundTickerIdleWhenUnfocused: false,
+        foregroundTickerIdleInterval: 8,
       );
       final restored = roundTrip(
         () => props.toJson(),
         AppSettingProps.fromJson,
       );
       expect(restored.locale, 'zh_CN');
+      expect(restored.dashboardWidgets, [
+        DashboardWidget.goroutineInfo,
+        DashboardWidget.connectionInfo,
+      ]);
       expect(restored.onlyStatisticsProxy, true);
       expect(restored.autoLaunch, true);
+      expect(restored.highPriorityAutoLaunch, true);
       expect(restored.closeConnections, false);
+      expect(restored.promptCloseConnections, false);
+      expect(restored.isSwipeToPage, false);
+      expect(restored.ignoreCertificateErrors, true);
       expect(restored.testUrl, 'https://custom.test');
       expect(restored.customUserAgent, 'CustomUA/1.0');
+      expect(restored.foregroundTickerInterval, 3);
+      expect(restored.foregroundTickerIdleWhenUnfocused, false);
+      expect(restored.foregroundTickerIdleInterval, 8);
     });
 
     test('safeFromJson returns default on null', () {
@@ -159,9 +194,9 @@ void main() {
       expect(props.width, 0);
     });
 
-    test('size extension defaults to 680x580 when empty', () {
+    test('size extension defaults to 700x580 when empty', () {
       const props = WindowProps();
-      expect(props.size.width, 680);
+      expect(props.size.width, 700);
       expect(props.size.height, 580);
     });
 
@@ -188,13 +223,14 @@ void main() {
       expect(props.systemProxy, true);
       expect(props.ipv6, false);
       expect(props.allowBypass, true);
-      expect(props.dnsHijacking, false);
+      expect(props.captureDns, true);
       expect(props.accessControlProps.enable, false);
     });
 
     test('fromJson handles null', () {
       final props = VpnProps.fromJson(null);
       expect(props.enable, true);
+      expect(props.captureDns, true);
     });
 
     test('round-trip with custom values', () {
@@ -239,14 +275,37 @@ void main() {
   });
 
   group('PatchClashConfig JSON round-trip', () {
+    test('DNS modes use their declared config values', () {
+      const values = {
+        DnsMode.normal: 'normal',
+        DnsMode.fakeIp: 'fake-ip',
+        DnsMode.redirHost: 'redir-host',
+        DnsMode.hosts: 'hosts',
+      };
+
+      for (final entry in values.entries) {
+        expect(entry.key.value, entry.value);
+
+        final dns = Dns(enhancedMode: entry.key);
+        expect(dns.toJson()['enhanced-mode'], entry.value);
+        expect(
+          Dns.fromJson({'enhanced-mode': entry.value}).enhancedMode,
+          entry.key,
+        );
+      }
+    });
+
     test('defaults match Clash patch defaults', () {
       const config = PatchClashConfig();
 
       expect(config.mixedPort, defaultMixedPort);
       expect(config.allowLan, false);
       expect(config.mode, Mode.rule);
-      expect(config.externalController, ExternalControllerStatus.close);
+      expect(config.externalController, '');
+      expect(config.secret, '');
       expect(config.geodataLoader, GeodataLoader.memconservative);
+      expect(config.geositeMatcher, GeositeMatcher.succinct);
+      expect(config.tun.mtu, defaultTunMtu);
     });
 
     test('custom values survive round-trip', () {
@@ -255,8 +314,17 @@ void main() {
         allowLan: true,
         mode: Mode.rule,
         logLevel: LogLevel.debug,
-        externalController: ExternalControllerStatus.open,
+        externalController: '0.0.0.0:9091',
+        secret: 'test-secret',
+        tun: Tun(
+          mtu: 1500,
+          dnsHijack: [],
+          strictRoute: true,
+          disableIcmpForwarding: true,
+          endpointIndependentNat: true,
+        ),
         geodataLoader: GeodataLoader.memconservative,
+        geositeMatcher: GeositeMatcher.mph,
       );
 
       final restored = roundTrip(
@@ -268,8 +336,26 @@ void main() {
       expect(restored.allowLan, true);
       expect(restored.mode, Mode.rule);
       expect(restored.logLevel, LogLevel.debug);
-      expect(restored.externalController, ExternalControllerStatus.open);
+      expect(restored.externalController, '0.0.0.0:9091');
+      expect(restored.secret, 'test-secret');
+      expect(restored.tun.mtu, 1500);
+      expect(restored.tun.toJson(), containsPair('mtu', 1500));
+      expect(restored.tun.dnsHijack, isEmpty);
+      expect(restored.tun.strictRoute, true);
+      expect(restored.tun.disableIcmpForwarding, true);
+      expect(restored.tun.endpointIndependentNat, true);
       expect(restored.geodataLoader, GeodataLoader.memconservative);
+      expect(restored.geositeMatcher, GeositeMatcher.mph);
+    });
+
+    test('mobile route mode selects native VPN included routes', () {
+      const tun = Tun(routeAddress: ['203.0.113.0/24']);
+
+      expect(
+        tun.getMobileRouteAddress(RouteMode.bypassPrivate),
+        defaultBypassPrivateRouteAddress,
+      );
+      expect(tun.getMobileRouteAddress(RouteMode.config), ['203.0.113.0/24']);
     });
   });
 
@@ -279,12 +365,14 @@ void main() {
       expect(props.type, ProxiesType.tab);
       expect(props.sortType, ProxiesSortType.none);
       expect(props.layout, ProxiesLayout.standard);
+      expect(props.showHiddenGroups, false);
     });
 
     test('round-trip with custom values', () {
       const props = ProxiesStyleProps(
         type: ProxiesType.list,
         sortType: ProxiesSortType.delay,
+        showHiddenGroups: true,
       );
       final restored = roundTrip(
         () => props.toJson(),
@@ -292,6 +380,7 @@ void main() {
       );
       expect(restored.type, ProxiesType.list);
       expect(restored.sortType, ProxiesSortType.delay);
+      expect(restored.showHiddenGroups, true);
     });
   });
 
@@ -300,14 +389,16 @@ void main() {
       const props = ThemeProps();
       expect(props.primaryColor, null);
       expect(props.primaryColors, defaultPrimaryColors);
-      expect(props.themeMode, ThemeMode.dark);
+      expect(props.themeMode, ThemeMode.system);
       expect(props.pureBlack, false);
+      expect(props.monochromeTrayIcon, true);
+      expect(props.predictiveBack, true);
       expect(props.textScale.scale, 1.0);
     });
 
     test('safeFromJson returns default on null', () {
       final result = ThemeProps.safeFromJson(null);
-      expect(result.themeMode, ThemeMode.dark);
+      expect(result.themeMode, ThemeMode.system);
     });
 
     test('round-trip with custom values', () {
@@ -315,12 +406,16 @@ void main() {
         primaryColor: 0xFF123456,
         themeMode: ThemeMode.light,
         pureBlack: true,
+        monochromeTrayIcon: true,
+        predictiveBack: true,
         textScale: TextScale(enable: true, scale: 1.5),
       );
       final restored = roundTrip(() => props.toJson(), ThemeProps.fromJson);
       expect(restored.primaryColor, 0xFF123456);
       expect(restored.themeMode, ThemeMode.light);
       expect(restored.pureBlack, true);
+      expect(restored.monochromeTrayIcon, true);
+      expect(restored.predictiveBack, true);
       expect(restored.textScale.scale, 1.5);
     });
   });

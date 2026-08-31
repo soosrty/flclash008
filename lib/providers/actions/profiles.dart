@@ -7,14 +7,17 @@ class ProfilesAction extends _$ProfilesAction {
 
   void updateCurrentSelectedMap(String groupName, String proxyName) {
     final currentProfile = ref.read(currentProfileProvider);
-    if (currentProfile != null &&
-        currentProfile.selectedMap[groupName] != proxyName) {
-      final selectedMap = Map<String, String>.from(currentProfile.selectedMap)
-        ..[groupName] = proxyName;
-      ref
-          .read(profilesProvider.notifier)
-          .put(currentProfile.copyWith(selectedMap: selectedMap));
+    if (currentProfile == null) return;
+    final selectedMap = Map<String, String>.from(currentProfile.selectedMap);
+    if (proxyName == compatibleProxyName) {
+      if (selectedMap.remove(groupName) == null) return;
+    } else {
+      if (selectedMap[groupName] == proxyName) return;
+      selectedMap[groupName] = proxyName;
     }
+    ref
+        .read(profilesProvider.notifier)
+        .put(currentProfile.copyWith(selectedMap: selectedMap));
   }
 
   Future<void> deleteProfile(int id) async {
@@ -87,7 +90,7 @@ class ProfilesAction extends _$ProfilesAction {
   Future<void> addProfileFormFile() async {
     final platformFile = await globalState.safeRun(picker.pickerFile);
     if (platformFile == null) return;
-    final bytes = await platformFile.readBytes();
+    final bytes = await platformFile.readAsBytes();
     globalState.navigatorKey.currentState?.popUntil((route) => route.isFirst);
     ref.read(currentPageLabelProvider.notifier).toProfiles();
     final profile = await globalState.loadingRun(
@@ -102,7 +105,7 @@ class ProfilesAction extends _$ProfilesAction {
     }
   }
 
-  Future<void> addProfileFormURL(String url) async {
+  Future<void> addProfileFormURL(String url, {String? ageSecretKey}) async {
     if (globalState.navigatorKey.currentState?.canPop() ?? false) {
       globalState.navigatorKey.currentState?.popUntil((route) => route.isFirst);
     }
@@ -110,7 +113,7 @@ class ProfilesAction extends _$ProfilesAction {
     final profile = await globalState.loadingRun(
       tag: LoadingTag.profiles,
       () async {
-        return Profile.normal(url: url).update();
+        return Profile.normal(url: url, ageSecretKey: ageSecretKey).update();
       },
       title: currentAppLocalizations.addProfile,
     );
@@ -143,7 +146,12 @@ class ProfilesAction extends _$ProfilesAction {
     if (isExists) {
       await profileFile.safeDelete(recursive: true);
     }
-    final error = await coreController.clearEffect(profileId);
+    final error = await coreController.deleteManagedPath(
+      DeleteManagedPathParams(
+        scope: ManagedPathScope.providers,
+        relativePath: profileId.toString(),
+      ),
+    );
     if (error.isNotEmpty) {
       commonPrint.log(error, logLevel: LogLevel.warning);
     }

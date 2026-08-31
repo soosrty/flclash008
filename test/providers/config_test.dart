@@ -21,16 +21,33 @@ void main() {
       final value = container.read(appSettingProvider);
       expect(value.onlyStatisticsProxy, false);
       expect(value.autoLaunch, false);
-      expect(value.closeConnections, true);
+      expect(value.highPriorityAutoLaunch, false);
+      expect(value.closeConnections, false);
+      expect(value.promptCloseConnections, true);
       expect(value.isAnimateToPage, true);
+      expect(value.isSwipeToPage, true);
+      expect(value.ignoreCertificateErrors, false);
+      expect(value.foregroundTickerInterval, defaultForegroundTickerInterval);
+      expect(value.foregroundTickerIdleWhenUnfocused, true);
+      expect(
+        value.foregroundTickerIdleInterval,
+        defaultForegroundTickerIdleInterval,
+      );
     });
 
     test('can update state', () {
       container
           .read(appSettingProvider.notifier)
-          .update((_) => const AppSettingProps(autoLaunch: true));
+          .update(
+            (_) => const AppSettingProps(
+              autoLaunch: true,
+              promptCloseConnections: false,
+            ),
+          );
       final value = container.read(appSettingProvider);
       expect(value.autoLaunch, true);
+      expect(value.highPriorityAutoLaunch, false);
+      expect(value.promptCloseConnections, false);
     });
   });
 
@@ -234,7 +251,7 @@ void main() {
         overrideDns: true,
       );
       final overrides = buildConfigOverrides(config);
-      expect(overrides.length, 12);
+      expect(overrides.length, 13);
 
       final overrideContainer = ProviderContainer(overrides: overrides);
       addTearDown(overrideContainer.dispose);

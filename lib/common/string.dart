@@ -4,6 +4,43 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:fl_clash/common/common.dart';
 
+class SearchMatcher {
+  final String query;
+  final bool useRegex;
+  final String _lowQuery;
+  final RegExp? _regExp;
+
+  SearchMatcher(this.query, {this.useRegex = false})
+    : _lowQuery = query.toLowerCase(),
+      _regExp = useRegex ? _tryBuildRegExp(query) : null;
+
+  static bool isValidRegex(String query) {
+    return _tryBuildRegExp(query) != null;
+  }
+
+  static RegExp? _tryBuildRegExp(String query) {
+    try {
+      return RegExp(query, caseSensitive: false);
+    } on FormatException {
+      return null;
+    }
+  }
+
+  bool hasMatch(String value) {
+    if (query.isEmpty) {
+      return true;
+    }
+    if (!useRegex) {
+      return value.toLowerCase().contains(_lowQuery);
+    }
+    return _regExp?.hasMatch(value) ?? false;
+  }
+
+  bool hasAnyMatch(Iterable<String> values) {
+    return values.any(hasMatch);
+  }
+}
+
 extension StringExtension on String {
   bool get isUrl {
     final uri = Uri.tryParse(this);
@@ -14,11 +51,14 @@ extension StringExtension on String {
         uri.host.isNotEmpty;
   }
 
-  dynamic get splitByMultipleSeparators {
-    final parts = split(
+  List<String> get splitByMultipleSeparatorsList {
+    return split(
       RegExp(r'[, ;]+'),
     ).where((part) => part.isNotEmpty).toList();
+  }
 
+  dynamic get splitByMultipleSeparators {
+    final parts = splitByMultipleSeparatorsList;
     return parts.length > 1 ? parts : this;
   }
 
@@ -74,6 +114,10 @@ extension StringExtension on String {
     }
   }
 
+  bool matchesQuery(String query, {bool useRegex = false}) {
+    return SearchMatcher(query, useRegex: useRegex).hasMatch(this);
+  }
+
   String toMd5() {
     final bytes = utf8.encode(this);
     return md5.convert(bytes).toString();
@@ -93,6 +137,12 @@ extension StringExtension on String {
       return null;
     }
     return this;
+  }
+}
+
+extension SearchableStringsExt on Iterable<String> {
+  bool matchesQuery(String query, {bool useRegex = false}) {
+    return SearchMatcher(query, useRegex: useRegex).hasAnyMatch(this);
   }
 }
 

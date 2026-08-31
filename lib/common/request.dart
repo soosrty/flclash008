@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -21,6 +22,8 @@ class Request {
     _clashDio.httpClientAdapter = IOHttpClientAdapter(
       createHttpClient: () {
         final client = HttpClient();
+        client.badCertificateCallback =
+            FlClashHttpOverrides.handleBadCertificate;
         client.findProxy = (Uri uri) {
           client.userAgent = globalState.ua;
           return FlClashHttpOverrides.handleFindProxy(uri);
@@ -32,38 +35,62 @@ class Request {
 
   Future<Response<Uint8List>> getFileResponseForUrl(String url) async {
     try {
-      return await _clashDio.get<Uint8List>(
-        url,
-        options: Options(responseType: ResponseType.bytes),
-      );
+      return await _clashDio
+          .get<Uint8List>(
+            url,
+            options: Options(responseType: ResponseType.bytes),
+          )
+          .timeout(const Duration(seconds: 10));
     } catch (e) {
       commonPrint.log('getFileResponseForUrl error ${e.toString()}');
       if (e is DioException) {
         if (e.type == DioExceptionType.unknown) {
+          final detail = e.error?.toString().trim();
+          if (detail != null && detail.isNotEmpty) {
+            throw '${currentAppLocalizations.unknownNetworkError}\n$detail';
+          }
           throw currentAppLocalizations.unknownNetworkError;
         } else if (e.type == DioExceptionType.badResponse) {
-          throw currentAppLocalizations.networkException;
+          final response = e.response;
+          final statusCode = response?.statusCode ?? 0;
+          final body = _extractResponseBody(response);
+          final detail = body.isNotEmpty
+              ? '[$statusCode]\n$body'
+              : '[$statusCode]';
+          throw '${currentAppLocalizations.networkException} $detail';
         }
         rethrow;
       }
-      throw currentAppLocalizations.unknownNetworkError;
+      throw '${currentAppLocalizations.unknownNetworkError}\n$e';
     }
   }
 
+  String _extractResponseBody(Response? response) {
+    if (response == null) return '';
+    final data = response.data;
+    if (data == null) return '';
+    if (data is Uint8List) {
+      try {
+        return utf8.decode(data).trim();
+      } catch (_) {
+        return '';
+      }
+    }
+    return data.toString().trim();
+  }
+
   Future<Response<String>> getTextResponseForUrl(String url) async {
-    final response = await _clashDio.get<String>(
-      url,
-      options: Options(responseType: ResponseType.plain),
-    );
+    final response = await _clashDio
+        .get<String>(url, options: Options(responseType: ResponseType.plain))
+        .timeout(const Duration(seconds: 10));
     return response;
   }
 
   Future<MemoryImage?> getImage(String url) async {
     if (url.isEmpty) return null;
-    final response = await dio.get<Uint8List>(
-      url,
-      options: Options(responseType: ResponseType.bytes),
-    );
+    final response = await dio
+        .get<Uint8List>(url, options: Options(responseType: ResponseType.bytes))
+        .timeout(const Duration(seconds: 10));
     final data = response.data;
     if (data == null) return null;
     return MemoryImage(data);
@@ -71,11 +98,12 @@ class Request {
 
   Future<Map<String, dynamic>?> checkForUpdate() async {
     try {
-      final response = await dio.get(
-        'https://api.github.com/repos/$repository/releases/latest',
-        options: Options(responseType: ResponseType.json),
-      );
-      if (response.statusCode != 200) return null;
+      final response = await dio
+          .get(
+            'https://api.github.com/repos/$repository/releases/latest',
+            options: Options(responseType: ResponseType.json),
+          )
+          .timeout(const Duration(seconds: 10));
       final data = response.data as Map<String, dynamic>;
       final remoteVersion = data['tag_name'];
       final version = globalState.packageInfo.version;
@@ -84,8 +112,7 @@ class Request {
       if (!hasUpdate) return null;
       return data;
     } catch (e) {
-      commonPrint.log('checkForUpdate failed', logLevel: LogLevel.warning);
-      return null;
+      rethrow;
     }
   }
 

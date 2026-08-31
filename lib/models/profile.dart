@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -23,8 +24,7 @@ abstract class SubscriptionInfo with _$SubscriptionInfo {
   factory SubscriptionInfo.fromJson(Map<String, Object?> json) =>
       _$SubscriptionInfoFromJson(json);
 
-  factory SubscriptionInfo.formHString(String? info) {
-    if (info == null) return const SubscriptionInfo();
+  factory SubscriptionInfo.formHString(String info) {
     final list = info.split(';');
     final Map<String, int?> map = {};
     for (final i in list) {
@@ -53,21 +53,29 @@ abstract class Profile with _$Profile {
     @Default(true) bool autoUpdate,
     @Default({}) Map<String, String> selectedMap,
     @Default({}) Set<String> unfoldSet,
-    @Default(OverwriteType.standard) OverwriteType overwriteType,
+    @Default(OverwriteType.standard)
+    @JsonKey(unknownEnumValue: OverwriteType.standard)
+    OverwriteType overwriteType,
     int? scriptId,
     int? order,
+    String? ageSecretKey,
   }) = _Profile;
 
   factory Profile.fromJson(Map<String, Object?> json) =>
       _$ProfileFromJson(json);
 
-  factory Profile.normal({String? label, String url = ''}) {
+  factory Profile.normal({
+    String? label,
+    String url = '',
+    String? ageSecretKey,
+  }) {
     final id = snowflake.id;
     return Profile(
       label: label ?? '',
       url: url,
       id: id,
       autoUpdateDuration: defaultUpdateDuration,
+      ageSecretKey: ageSecretKey,
     );
   }
 }
@@ -179,33 +187,36 @@ extension ProfileExtension on Profile {
     return copyWith(
       label: label.takeFirstValid([
         utils.getFileNameForDisposition(disposition),
+        utils.getFileNameFromUrl(url),
         id.toString(),
       ]),
-      subscriptionInfo: SubscriptionInfo.formHString(userinfo),
+      subscriptionInfo: userinfo != null
+          ? SubscriptionInfo.formHString(userinfo)
+          : null,
     ).saveFile(response.data ?? Uint8List.fromList([]));
   }
 
   Future<Profile> saveFile(Uint8List bytes) async {
-    final path = await appPath.tempFilePath;
-    final tempFile = File(path);
-    await tempFile.safeWriteAsBytes(bytes);
-    final message = await coreController.validateConfig(path);
+    String content = utf8.decode(bytes);
+    final key = ageSecretKey;
+    if (key != null && key.isNotEmpty) {
+      try {
+        final decrypted = await coreController.decryptAgeConfig(content, key);
+        if (decrypted.isNotEmpty) {
+          content = decrypted;
+        }
+      } catch (_) {}
+    }
+    final message = await coreController.validateConfig(content);
     if (message.isNotEmpty) {
       throw message;
     }
+    final path = await appPath.tempFilePath;
+    final tempFile = File(path);
+    await tempFile.safeWriteAsString(content);
     final mFile = await file;
     await tempFile.copy(mFile.path);
     await tempFile.safeDelete();
-    return copyWith(lastUpdateDate: DateTime.now());
-  }
-
-  Future<Profile> saveFileWithPath(String path) async {
-    final message = await coreController.validateConfig(path);
-    if (message.isNotEmpty) {
-      throw message;
-    }
-    final mFile = await file;
-    await File(path).copy(mFile.path);
     return copyWith(lastUpdateDate: DateTime.now());
   }
 }

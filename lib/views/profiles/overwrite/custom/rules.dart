@@ -167,6 +167,7 @@ class _CustomRulesViewState extends ConsumerState<CustomRulesView>
         if (selectedRules.isNotEmpty) ...[
           CommonMinIconButtonTheme(
             child: IconButton.filledTonal(
+              tooltip: appLocalizations.delete,
               onPressed: _handleDelete,
               icon: const Icon(Icons.delete),
             ),
@@ -314,7 +315,7 @@ class _AddOrEditRuleNestedSheetState
     if (state != null && state.canPop()) {
       state.pop();
     } else {
-      _handleExit();
+      await _handleExit();
     }
   }
 
@@ -338,7 +339,7 @@ class _AddOrEditRuleNestedSheetState
         : context.colorScheme.surface;
     return CommonPopScope(
       onPop: (_) async {
-        _handlePop();
+        await _handlePop();
         return false;
       },
       child: sheetProvider!.copyWith(

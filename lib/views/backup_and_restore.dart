@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/common/dav_client.dart';
+import 'package:fl_clash/common/reset.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/providers/action.dart';
@@ -201,6 +202,26 @@ class _BackupAndRestoreState extends ConsumerState<BackupAndRestore>
         .update((state) => state.copyWith(restoreStrategy: res));
   }
 
+  Future<void> _handleClearData() async {
+    final appLocalizations = context.appLocalizations;
+    final types = await globalState.showCommonDialog<Set<ResetDataType>>(
+      child: const ResetDataOptionsDialog(),
+    );
+    if (types == null || types.isEmpty || !mounted) {
+      return;
+    }
+    final res = await globalState.showMessage(
+      title: appLocalizations.clearData,
+      message: TextSpan(text: appLocalizations.confirmClearSelectedData),
+    );
+    if (res != true) {
+      return;
+    }
+    await globalState.container
+        .read(storeActionProvider.notifier)
+        .handleClear(types);
+  }
+
   @override
   Widget build(BuildContext context) {
     final appLocalizations = context.appLocalizations;
@@ -221,7 +242,7 @@ class _BackupAndRestoreState extends ConsumerState<BackupAndRestore>
                 onPressed: () {
                   _showAddWebDAV(dav);
                 },
-                child: Text(appLocalizations.bind),
+                child: Text(appLocalizations.signIn),
               ),
             )
           else ...[
@@ -229,7 +250,7 @@ class _BackupAndRestoreState extends ConsumerState<BackupAndRestore>
               leading: const Icon(Icons.account_box),
               title: TooltipText(
                 text: Text(
-                  dav.user,
+                  dav.user.isEmpty ? dav.uri : dav.user,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -240,6 +261,7 @@ class _BackupAndRestoreState extends ConsumerState<BackupAndRestore>
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Text(appLocalizations.connectivity),
+                    const SizedBox(width: 8),
                     ValueListenableBuilder(
                       valueListenable: _davConnection,
                       builder: (_, isCompleter, _) {
@@ -339,6 +361,91 @@ class _BackupAndRestoreState extends ConsumerState<BackupAndRestore>
                   ),
                 ),
               );
+            },
+          ),
+          ListItem(
+            onTap: _handleClearData,
+            title: Text(
+              appLocalizations.clearData,
+              style: TextStyle(color: context.colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ResetDataOptionsDialog extends StatefulWidget {
+  const ResetDataOptionsDialog({super.key});
+
+  @override
+  State<ResetDataOptionsDialog> createState() => _ResetDataOptionsDialogState();
+}
+
+class _ResetDataOptionsDialogState extends State<ResetDataOptionsDialog> {
+  final _selected = <ResetDataType>{};
+
+  void _update(ResetDataType type, bool? selected) {
+    setState(() {
+      _selected.remove(ResetDataType.allData);
+      selected == true ? _selected.add(type) : _selected.remove(type);
+    });
+  }
+
+  void _updateAll(bool? selected) {
+    setState(() {
+      _selected
+        ..clear()
+        ..addAll(selected == true ? allResetDataTypes : const {});
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appLocalizations = context.appLocalizations;
+    return CommonDialog(
+      title: appLocalizations.clearData,
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.of(context).pop();
+          },
+          child: Text(appLocalizations.cancel),
+        ),
+        TextButton(
+          onPressed: _selected.isEmpty
+              ? null
+              : () {
+                  Navigator.of(context).pop(Set<ResetDataType>.of(_selected));
+                },
+          style: TextButton.styleFrom(
+            foregroundColor: context.colorScheme.error,
+          ),
+          child: Text(appLocalizations.confirm),
+        ),
+      ],
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListItem.checkbox(
+            title: Text(appLocalizations.allData),
+            value: _selected.contains(ResetDataType.allData),
+            onChanged: _updateAll,
+          ),
+          ListItem.checkbox(
+            title: Text(appLocalizations.resetSettingsData),
+            value: _selected.contains(ResetDataType.settings),
+            onChanged: (value) {
+              _update(ResetDataType.settings, value);
+            },
+          ),
+          ListItem.checkbox(
+            title: Text(appLocalizations.resetProfilesAndScripts),
+            value: _selected.contains(ResetDataType.profilesAndScripts),
+            onChanged: (value) {
+              _update(ResetDataType.profilesAndScripts, value);
             },
           ),
         ],
@@ -480,12 +587,6 @@ class _WebDAVFormDialogState extends ConsumerState<WebDAVFormDialog> {
                 border: const OutlineInputBorder(),
                 labelText: appLocalizations.account,
               ),
-              validator: (String? value) {
-                if (value == null || value.isEmpty) {
-                  return appLocalizations.emptyTip(appLocalizations.account);
-                }
-                return null;
-              },
             ),
             ValueListenableBuilder(
               valueListenable: _obscureController,
@@ -509,14 +610,6 @@ class _WebDAVFormDialogState extends ConsumerState<WebDAVFormDialog> {
                     ),
                     labelText: appLocalizations.password,
                   ),
-                  validator: (String? value) {
-                    if (value == null || value.isEmpty) {
-                      return appLocalizations.emptyTip(
-                        appLocalizations.password,
-                      );
-                    }
-                    return null;
-                  },
                 );
               },
             ),

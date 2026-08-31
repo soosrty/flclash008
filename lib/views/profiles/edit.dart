@@ -9,6 +9,7 @@ import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/pages/editor.dart';
 import 'package:fl_clash/providers/action.dart';
 import 'package:fl_clash/state.dart';
+import 'package:fl_clash/views/profiles/age_key_generator.dart';
 import 'package:fl_clash/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 
@@ -23,14 +24,16 @@ class EditProfileView extends StatefulWidget {
   });
 
   @override
-  State<EditProfileView> createState() => _EditProfileViewState();
+  State<EditProfileView> createState() => EditProfileViewState();
 }
 
-class _EditProfileViewState extends State<EditProfileView> {
+class EditProfileViewState extends State<EditProfileView> {
   late final TextEditingController _labelController;
   late final TextEditingController _urlController;
   late final TextEditingController _autoUpdateDurationController;
+  late final TextEditingController _ageSecretKeyController;
   late bool _autoUpdate;
+  bool _obscureAgeSecretKey = true;
   String? _rawText;
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final _fileInfoNotifier = ValueNotifier<FileInfo?>(null);
@@ -45,7 +48,15 @@ class _EditProfileViewState extends State<EditProfileView> {
     _autoUpdateDurationController = TextEditingController(
       text: widget.profile.autoUpdateDuration.inMinutes.toString(),
     );
+    _ageSecretKeyController = TextEditingController(
+      text: widget.profile.ageSecretKey,
+    );
     _updateFileInfo();
+  }
+
+  String? get _ageSecretKey {
+    final value = _ageSecretKeyController.text.trim();
+    return value.isEmpty ? null : value;
   }
 
   Future<void> _updateFileInfo() async {
@@ -63,6 +74,7 @@ class _EditProfileViewState extends State<EditProfileView> {
       url: _urlController.text,
       label: _labelController.text,
       autoUpdate: _autoUpdate,
+      ageSecretKey: _ageSecretKey,
       autoUpdateDuration: Duration(
         minutes: int.parse(_autoUpdateDurationController.text),
       ),
@@ -107,7 +119,7 @@ class _EditProfileViewState extends State<EditProfileView> {
 
   Future<void> _handleSaveEdit(BuildContext context, String data) async {
     final message = await globalState.safeRun<String>(() async {
-      final message = await coreController.validateConfigWithData(data);
+      final message = await coreController.validateConfig(data);
       return message;
     }, silence: false);
     if (message?.isNotEmpty == true) {
@@ -143,7 +155,7 @@ class _EditProfileViewState extends State<EditProfileView> {
         _handleSaveEdit(context, content);
       },
       onPop: (context, _, content) async {
-        if (content == _rawText) {
+        if (content == _rawText?.replaceAll('\r', '')) {
           return true;
         }
         final res = await globalState.showMessage(
@@ -151,7 +163,7 @@ class _EditProfileViewState extends State<EditProfileView> {
           message: TextSpan(text: context.appLocalizations.hasCacheChange),
         );
         if (res == true && context.mounted) {
-          _handleSaveEdit(context, content);
+          await _handleSaveEdit(context, content);
         } else {
           return true;
         }
@@ -162,8 +174,10 @@ class _EditProfileViewState extends State<EditProfileView> {
     if (data == null) {
       return;
     }
-    _rawText = data;
-    _fileData = Uint8List.fromList(utf8.encode(data));
+    setState(() {
+      _rawText = data;
+      _fileData = Uint8List.fromList(utf8.encode(data));
+    });
     _fileInfoNotifier.value = _fileInfoNotifier.value?.copyWith(
       size: _fileData?.length ?? 0,
       lastModified: DateTime.now(),
@@ -173,7 +187,7 @@ class _EditProfileViewState extends State<EditProfileView> {
   Future<void> _uploadProfileFile() async {
     final platformFile = await globalState.safeRun(picker.pickerFile);
     if (platformFile == null) return;
-    _fileData = await platformFile.readBytes();
+    _fileData = await platformFile.readAsBytes();
     if (!mounted) {
       return;
     }
@@ -198,12 +212,17 @@ class _EditProfileViewState extends State<EditProfileView> {
     }
   }
 
+  void showAgeKeyGenerator() {
+    globalState.showCommonDialog(child: const AgeKeyGeneratorDialog());
+  }
+
   @override
   void dispose() {
     _labelController.dispose();
     _urlController.dispose();
     _fileInfoNotifier.dispose();
     _autoUpdateDurationController.dispose();
+    _ageSecretKeyController.dispose();
     super.dispose();
     globalState.container.read(setupActionProvider.notifier).autoApplyProfile();
   }
@@ -248,6 +267,41 @@ class _EditProfileViewState extends State<EditProfileView> {
               }
               if (!value.isUrl) {
                 return appLocalizations.profileUrlInvalidValidationDesc;
+              }
+              return null;
+            },
+          ),
+        ),
+        ListItem(
+          title: TextFormField(
+            textInputAction: TextInputAction.next,
+            controller: _ageSecretKeyController,
+            obscureText: _obscureAgeSecretKey,
+            maxLines: 1,
+            minLines: 1,
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              labelText: appLocalizations.ageSecretKeyOptional,
+              hintText: 'AGE-SECRET-KEY-...',
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscureAgeSecretKey
+                      ? Icons.visibility
+                      : Icons.visibility_off,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _obscureAgeSecretKey = !_obscureAgeSecretKey;
+                  });
+                },
+              ),
+            ),
+            validator: (String? value) {
+              if (value == null || value.isEmpty) {
+                return null;
+              }
+              if (!value.startsWith('AGE-SECRET-KEY-')) {
+                return appLocalizations.ageSecretKeyInvalidValidationDesc;
               }
               return null;
             },
@@ -328,11 +382,12 @@ class _EditProfileViewState extends State<EditProfileView> {
       policy: PageTraversalPolicy(),
       child: PageFocusScope(
         child: CommonPopScope(
-          onPop: (context) {
+          canPop: _fileData == null,
+          onPop: (context) async {
             if (_fileData == null) {
               return true;
             }
-            _handleBack();
+            await _handleBack();
             return false;
           },
           child: FloatLayout(
