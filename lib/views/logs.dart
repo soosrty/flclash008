@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:fl_clash/common/common.dart';
+import 'package:fl_clash/core/controller.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/state.dart';
 import 'package:fl_clash/widgets/widgets.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
 
@@ -20,12 +24,15 @@ class _LogsViewState extends ConsumerState<LogsView> {
   late ScrollController _scrollController;
 
   List<Log> _logs = [];
+  bool _logListening = false;
 
   @override
   void initState() {
     super.initState();
+    globalState.isBackground.addListener(_syncListening);
+    _syncListening();
     _logs = ref.read(logsProvider).list;
-    _scrollController = ScrollController(initialScrollOffset: double.maxFinite);
+    _scrollController = ReverseScrollController();
     _logsStateNotifier.value = _logsStateNotifier.value.copyWith(logs: _logs);
     ref.listenManual(logsProvider.select((state) => VM(state.list)), (
       prev,
@@ -42,12 +49,37 @@ class _LogsViewState extends ConsumerState<LogsView> {
   }
 
   List<Widget> _buildActions() {
+    final appLocalizations = context.appLocalizations;
+    final logsState = _logsStateNotifier.value;
     return [
+      _LogFilterButton(
+        logsState: logsState,
+        onToggleSource: (source) {
+          setState(() {
+            _logsStateNotifier.value = _logsStateNotifier.value.toggleSource(
+              source,
+            );
+          });
+        },
+        onToggleLevel: (level) {
+          setState(() {
+            _logsStateNotifier.value = _logsStateNotifier.value.toggleLevel(
+              level,
+            );
+          });
+        },
+        onClear: () {
+          setState(() {
+            _logsStateNotifier.value = _logsStateNotifier.value.clearFilters();
+          });
+        },
+      ),
       IconButton(
+        tooltip: appLocalizations.exportFile,
         onPressed: () {
           _handleExport();
         },
-        icon: const Icon(Icons.save_as_outlined),
+        icon: const Icon(Icons.save_outlined),
       ),
     ];
   }
@@ -56,17 +88,53 @@ class _LogsViewState extends ConsumerState<LogsView> {
     _logsStateNotifier.value = _logsStateNotifier.value.copyWith(query: value);
   }
 
-  void _onKeywordsUpdate(List<String> keywords) {
+  void _onRegexSearchChange(bool value) {
     _logsStateNotifier.value = _logsStateNotifier.value.copyWith(
-      keywords: keywords,
+      useRegex: value,
     );
   }
 
   @override
   void dispose() {
+    globalState.isBackground.removeListener(_syncListening);
+    _stopListening();
     _logsStateNotifier.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _syncListening() {
+    if (globalState.isBackground.value) {
+      _stopListening();
+    } else {
+      _startListening();
+    }
+  }
+
+  void _startListening() {
+    if (_logListening) {
+      return;
+    }
+    _logListening = true;
+    unawaited(
+      coreController.startLogNotify().then((logs) {
+        if (!mounted || !_logListening) {
+          return;
+        }
+        final coreLogs = logs
+            .map((log) => log.copyWith(source: LogSource.core))
+            .toList();
+        ref.read(logsProvider.notifier).addLogs(coreLogs);
+      }),
+    );
+  }
+
+  void _stopListening() {
+    if (!_logListening) {
+      return;
+    }
+    _logListening = false;
+    coreController.stopLogNotify();
   }
 
   Future<void> _handleExport() async {
@@ -108,8 +176,11 @@ class _LogsViewState extends ConsumerState<LogsView> {
     final appLocalizations = context.appLocalizations;
     return CommonScaffold(
       actions: _buildActions(),
-      onKeywordsUpdate: _onKeywordsUpdate,
-      searchState: AppBarSearchState(onSearch: _onSearch),
+      searchState: AppBarSearchState(
+        onSearch: _onSearch,
+        onRegexChange: _onRegexSearchChange,
+        useRegex: _logsStateNotifier.value.useRegex,
+      ),
       title: appLocalizations.logs,
       floatingActionButton: ValueListenableBuilder(
         valueListenable: _logsStateNotifier,
@@ -124,8 +195,8 @@ class _LogsViewState extends ConsumerState<LogsView> {
                 );
               },
               child: autoScrollToEnd
-                  ? const Icon(Icons.block)
-                  : const Icon(Icons.vertical_align_top),
+                  ? const Icon(Icons.pause)
+                  : const Icon(Icons.play_arrow),
             ),
           );
         },
@@ -142,13 +213,7 @@ class _LogsViewState extends ConsumerState<LogsView> {
           }
           final items = logs
               .map<Widget>(
-                (log) => LogItem(
-                  key: Key(log.dateTime),
-                  log: log,
-                  onClick: (value) {
-                    context.commonScaffoldState?.addKeyword(value);
-                  },
-                ),
+                (log) => LogItem(key: Key(log.timestamp.toString()), log: log),
               )
               .separated(const Divider(height: 0))
               .toList();
@@ -170,9 +235,7 @@ class _LogsViewState extends ConsumerState<LogsView> {
                   reverse: true,
                   shrinkWrap: true,
                   controller: _scrollController,
-                  itemBuilder: (_, index) {
-                    return items[index];
-                  },
+                  itemBuilder: (_, index) => items[index],
                   itemCount: items.length,
                 ),
               ),
@@ -184,45 +247,153 @@ class _LogsViewState extends ConsumerState<LogsView> {
   }
 }
 
-class LogItem extends StatelessWidget {
-  final Log log;
-  final Function(String)? onClick;
+class _LogFilterButton extends StatelessWidget {
+  final LogsState logsState;
+  final ValueChanged<LogSource> onToggleSource;
+  final ValueChanged<LogLevel> onToggleLevel;
+  final VoidCallback onClear;
 
-  const LogItem({super.key, required this.log, this.onClick});
+  const _LogFilterButton({
+    required this.logsState,
+    required this.onToggleSource,
+    required this.onToggleLevel,
+    required this.onClear,
+  });
+
+  String _getLabel(Enum value) {
+    return value.name.toUpperCase();
+  }
+
+  List<PopupMenuItemData> _buildItems(BuildContext context) {
+    final appLocalizations = context.appLocalizations;
+    final levels = LogLevel.values
+        .where((level) => level != LogLevel.silent)
+        .toList();
+    return [
+      PopupMenuItemData(
+        icon: Icons.source_outlined,
+        label: appLocalizations.source,
+        subItems: [
+          for (final source in LogSource.values)
+            PopupMenuItemData(
+              label: _getLabel(source),
+              selected: logsState.sources.contains(source),
+              closeOnPressed: false,
+              onPressed: () {
+                onToggleSource(source);
+              },
+            ),
+        ],
+      ),
+      PopupMenuItemData(
+        icon: Icons.flag_outlined,
+        label: appLocalizations.level,
+        subItems: [
+          for (final level in levels)
+            PopupMenuItemData(
+              label: _getLabel(level),
+              selected: logsState.levels.contains(level),
+              closeOnPressed: false,
+              onPressed: () {
+                onToggleLevel(level);
+              },
+            ),
+        ],
+      ),
+      PopupMenuItemData(
+        icon: Icons.filter_alt_off_outlined,
+        label: appLocalizations.reset,
+        onPressed: onClear,
+      ),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
-    return ListItem(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      onTap: () {},
-      title: SelectableText(
-        log.payload,
-        style: context.textTheme.bodyLarge?.copyWith(
-          color: log.logLevel.color(context),
-        ),
+    return CommonPopupBox(
+      popup: CommonPopupMenu(items: _buildItems(context)),
+      targetBuilder: (open) {
+        if (logsState.hasFilters) {
+          return IconButton.filledTonal(
+            tooltip: context.appLocalizations.filter,
+            onPressed: () {
+              open(targetContext: context);
+            },
+            icon: const Icon(Icons.filter_alt_outlined),
+          );
+        }
+        return IconButton(
+          tooltip: context.appLocalizations.filter,
+          onPressed: () {
+            open(targetContext: context);
+          },
+          icon: const Icon(Icons.filter_alt_outlined),
+        );
+      },
+    );
+  }
+}
+
+class LogItem extends StatelessWidget {
+  final Log log;
+
+  const LogItem({super.key, required this.log});
+
+  @override
+  Widget build(BuildContext context) {
+    final appLocalizations = context.appLocalizations;
+    final sourceLabel = log.source.name.toUpperCase();
+    final levelLabel = log.logLevel.name.toUpperCase();
+    return CommonPopupBox(
+      popup: CommonPopupMenu(
+        items: [
+          PopupMenuItemData(
+            icon: Icons.copy,
+            label: appLocalizations.copy,
+            onPressed: () => copyText(context, log.payload),
+          ),
+        ],
       ),
-      subtitle: Column(
-        children: [
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      targetBuilder: (open) => Builder(
+        builder: (context) => ListItem(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          onLongPress: () {
+            copyText(context, log.payload);
+          },
+          onSecondaryTapDown: (_) => open(targetContext: context),
+          title: Text(
+            log.payload,
+            style: context.textTheme.bodyMedium?.copyWith(
+              color: log.logLevel.color(context),
+            ),
+          ),
+          subtitle: Column(
             children: [
-              CommonChip(
-                onPressed: () {
-                  if (onClick == null) return;
-                  onClick!(log.logLevel.name);
-                },
-                label: log.logLevel.name,
-              ),
-              Text(
-                log.dateTime,
-                style: context.textTheme.bodySmall?.copyWith(
-                  color: context.colorScheme.onSurface.opacity80,
-                ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '${appLocalizations.source} $sourceLabel · ${appLocalizations.level} $levelLabel',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.textTheme.labelMedium?.copyWith(
+                      color: context.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  Text(
+                    DateTime.fromMillisecondsSinceEpoch(
+                      log.timestamp,
+                    ).toLocal().showFull,
+                    style: context.textTheme.bodySmall?.copyWith(
+                      color: context.colorScheme.onSurface.opacity80,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
