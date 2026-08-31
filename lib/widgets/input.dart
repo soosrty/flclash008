@@ -240,10 +240,106 @@ class ListInputPage extends ConsumerStatefulWidget {
   ConsumerState createState() => _ListInputPageState();
 }
 
-class _ListInputPageState extends ConsumerState<ListInputPage> {
+mixin _DragSelectionMixin<T extends ConsumerStatefulWidget>
+    on ConsumerState<T> {
+  final Map<String, GlobalKey> _dragSelectionKeys = {};
+  Set<String> _initialDragSelectedIds = {};
+  bool _dragSelectionValue = false;
+  int? _dragSelectionStartIndex;
+  int? _lastDragSelectionIndex;
+
+  List<String> get dragSelectionIds;
+
+  Set<dynamic> get dragSelectedIds;
+
+  void setDragSelected(String id, bool selected);
+
+  GlobalKey dragSelectionKey(String id) {
+    return _dragSelectionKeys.putIfAbsent(id, GlobalKey.new);
+  }
+
+  void startDragSelection(String id, LongPressStartDetails details) {
+    final index = dragSelectionIds.indexOf(id);
+    if (index == -1) return;
+    _initialDragSelectedIds = dragSelectedIds.whereType<String>().toSet();
+    _dragSelectionValue = !_initialDragSelectedIds.contains(id);
+    _dragSelectionStartIndex = index;
+    _lastDragSelectionIndex = index;
+    setDragSelected(id, _dragSelectionValue);
+    _updateDragSelectionAt(details.globalPosition);
+  }
+
+  void updateDragSelection(LongPressMoveUpdateDetails details) {
+    _updateDragSelectionAt(details.globalPosition);
+  }
+
+  void _updateDragSelectionAt(Offset globalPosition) {
+    final index = _indexAt(globalPosition);
+    final startIndex = _dragSelectionStartIndex;
+    final lastIndex = _lastDragSelectionIndex;
+    if (index == null || startIndex == null || lastIndex == null) return;
+    if (index == lastIndex) return;
+    final previousStart = startIndex < lastIndex ? startIndex : lastIndex;
+    final previousEnd = startIndex > lastIndex ? startIndex : lastIndex;
+    final currentStart = startIndex < index ? startIndex : index;
+    final currentEnd = startIndex > index ? startIndex : index;
+    final affectedStart = previousStart < currentStart
+        ? previousStart
+        : currentStart;
+    final affectedEnd = previousEnd > currentEnd ? previousEnd : currentEnd;
+    for (var current = affectedStart; current <= affectedEnd; current++) {
+      final id = dragSelectionIds[current];
+      final isInCurrentRange = current >= currentStart && current <= currentEnd;
+      final selected = isInCurrentRange
+          ? _dragSelectionValue
+          : _initialDragSelectedIds.contains(id);
+      setDragSelected(id, selected);
+    }
+    _lastDragSelectionIndex = index;
+  }
+
+  void endDragSelection([LongPressEndDetails? details]) {
+    _initialDragSelectedIds = {};
+    _dragSelectionStartIndex = null;
+    _lastDragSelectionIndex = null;
+  }
+
+  int? _indexAt(Offset globalPosition) {
+    final ids = dragSelectionIds;
+    for (var index = 0; index < ids.length; index++) {
+      final context = _dragSelectionKeys[ids[index]]?.currentContext;
+      final renderObject = context?.findRenderObject();
+      if (renderObject is! RenderBox || !renderObject.hasSize) continue;
+      final position = renderObject.globalToLocal(globalPosition);
+      if ((Offset.zero & renderObject.size).contains(position)) {
+        return index;
+      }
+    }
+    return null;
+  }
+}
+
+class _ListInputPageState extends ConsumerState<ListInputPage>
+    with _DragSelectionMixin<ListInputPage> {
   List<String> _items = [];
   late List<String> _originItems;
   final _key = utils.id;
+
+  @override
+  List<String> get dragSelectionIds => _items;
+
+  @override
+  Set<dynamic> get dragSelectedIds => ref.read(itemsProvider(_key));
+
+  @override
+  void setDragSelected(String id, bool selected) {
+    ref.read(itemsProvider(_key).notifier).update((state) {
+      if (state.contains(id) == selected) return state;
+      final nextState = Set<String>.from(state);
+      selected ? nextState.add(id) : nextState.remove(id);
+      return nextState;
+    });
+  }
 
   @override
   void initState() {
@@ -337,6 +433,7 @@ class _ListInputPageState extends ConsumerState<ListInputPage> {
     required int length,
     required bool isSelected,
     required bool isEditing,
+    bool trackDragSelection = true,
   }) {
     final position = ItemPosition.get(index, length);
     return ReorderableDelayedDragStartListener(
@@ -344,22 +441,33 @@ class _ListInputPageState extends ConsumerState<ListInputPage> {
       index: index,
       child: ItemPositionProvider(
         position: position,
-        child: SelectedDecorationListItem(
-          title: widget.titleBuilder(value),
-          isSelected: isSelected,
-          isEditing: isEditing,
-          onSelected: () {
-            _handleSelected(value);
-          },
-          onPressed: () {
-            _handleAddOrEdit(value);
-          },
-          leading: widget.leadingBuilder != null
-              ? widget.leadingBuilder!(value)
-              : null,
-          subtitle: widget.subtitleBuilder != null
-              ? widget.subtitleBuilder!(value)
-              : null,
+        child: KeyedSubtree(
+          key: trackDragSelection ? dragSelectionKey(value) : null,
+          child: SelectedDecorationListItem(
+            title: widget.titleBuilder(value),
+            isSelected: isSelected,
+            isEditing: isEditing,
+            onSelected: () {
+              _handleSelected(value);
+            },
+            onPressed: () {
+              _handleAddOrEdit(value);
+            },
+            onSelectionDragStart: trackDragSelection
+                ? (details) => startDragSelection(value, details)
+                : null,
+            onSelectionDragUpdate: trackDragSelection
+                ? updateDragSelection
+                : null,
+            onSelectionDragEnd: trackDragSelection ? endDragSelection : null,
+            onSelectionDragCancel: trackDragSelection ? endDragSelection : null,
+            leading: widget.leadingBuilder != null
+                ? widget.leadingBuilder!(value)
+                : null,
+            subtitle: widget.subtitleBuilder != null
+                ? widget.subtitleBuilder!(value)
+                : null,
+          ),
         ),
       ),
     );
@@ -369,7 +477,12 @@ class _ListInputPageState extends ConsumerState<ListInputPage> {
   Widget build(BuildContext context) {
     final appLocalizations = context.appLocalizations;
     final selectedItems = ref.watch(itemsProvider(_key));
+    final route = ModalRoute.of(context);
+    if (route is CommonRoute) {
+      route.updateCurrentResult(List<String>.from(_items));
+    }
     return CommonPopScope(
+      canPop: route is CommonRoute && selectedItems.isEmpty,
       onPop: (_) {
         if (selectedItems.isNotEmpty) {
           ref.read(itemsProvider(_key).notifier).value = {};
@@ -443,6 +556,7 @@ class _ListInputPageState extends ConsumerState<ListInputPage> {
                       length: _items.length,
                       isSelected: selectedItems.contains(value),
                       isEditing: selectedItems.isNotEmpty,
+                      trackDragSelection: false,
                     ),
                     index,
                     animation,
@@ -465,6 +579,8 @@ class MapInputPage extends ConsumerStatefulWidget {
   final String? valueLabel;
   final int? keyMaxLength;
   final int? valueMaxLength;
+  final List<String> Function(String value)? valueParser;
+  final String Function(List<String> values)? valueSerializer;
 
   const MapInputPage({
     super.key,
@@ -477,16 +593,35 @@ class MapInputPage extends ConsumerStatefulWidget {
     this.subtitleBuilder,
     this.keyMaxLength,
     this.valueMaxLength,
-  });
+    this.valueParser,
+    this.valueSerializer,
+  }) : assert((valueParser == null) == (valueSerializer == null));
 
   @override
   ConsumerState<MapInputPage> createState() => _MapInputPageState();
 }
 
-class _MapInputPageState extends ConsumerState<MapInputPage> {
+class _MapInputPageState extends ConsumerState<MapInputPage>
+    with _DragSelectionMixin<MapInputPage> {
   List<MapEntry<String, String>> _items = [];
   late final List<MapEntry<String, String>> _originItems;
   final _key = utils.id;
+
+  @override
+  List<String> get dragSelectionIds => _items.map((item) => item.key).toList();
+
+  @override
+  Set<dynamic> get dragSelectedIds => ref.read(itemsProvider(_key));
+
+  @override
+  void setDragSelected(String id, bool selected) {
+    ref.read(itemsProvider(_key).notifier).update((state) {
+      if (state.contains(id) == selected) return state;
+      final nextState = Set<String>.from(state);
+      selected ? nextState.add(id) : nextState.remove(id);
+      return nextState;
+    });
+  }
 
   @override
   void initState() {
@@ -527,6 +662,13 @@ class _MapInputPageState extends ConsumerState<MapInputPage> {
       return null;
     }
 
+    if (widget.valueParser != null) {
+      final value = await _showListValueDialog(item, uniqueValidator);
+      if (value == null) return;
+      _updateItem(item, value);
+      return;
+    }
+
     final keyField = Field(
       label: widget.keyLabel ?? appLocalizations.key,
       value: item == null ? '' : item.key,
@@ -548,6 +690,39 @@ class _MapInputPageState extends ConsumerState<MapInputPage> {
       ),
     );
     if (value == null) return;
+    _updateItem(item, value);
+  }
+
+  Future<MapEntry<String, String>?> _showListValueDialog(
+    MapEntry<String, String>? item,
+    FormFieldValidator<String> uniqueValidator,
+  ) async {
+    final appLocalizations = context.appLocalizations;
+    final value = await globalState
+        .showCommonDialog<MapEntry<String, List<String>>>(
+          child: MapEntryListDialog(
+            title: item != null ? appLocalizations.edit : appLocalizations.add,
+            keyField: Field(
+              label: widget.keyLabel ?? appLocalizations.key,
+              value: item?.key ?? '',
+              validator: uniqueValidator,
+            ),
+            values: item == null ? const [] : widget.valueParser!(item.value),
+            valueLabel: widget.valueLabel ?? appLocalizations.value,
+            keyMaxLength: widget.keyMaxLength,
+            valueMaxLength: widget.valueMaxLength,
+          ),
+        );
+    if (value == null) {
+      return null;
+    }
+    return MapEntry(value.key, widget.valueSerializer!(value.value));
+  }
+
+  void _updateItem(
+    MapEntry<String, String>? item,
+    MapEntry<String, String> value,
+  ) {
     final index = _items.indexWhere((entry) {
       return entry.key == item?.key;
     });
@@ -589,6 +764,7 @@ class _MapInputPageState extends ConsumerState<MapInputPage> {
     required int length,
     required bool isSelected,
     required bool isEditing,
+    bool trackDragSelection = true,
   }) {
     final position = ItemPosition.get(index, length);
     return ReorderableDelayedDragStartListener(
@@ -596,22 +772,33 @@ class _MapInputPageState extends ConsumerState<MapInputPage> {
       index: index,
       child: ItemPositionProvider(
         position: position,
-        child: SelectedDecorationListItem(
-          title: widget.titleBuilder(value),
-          leading: widget.leadingBuilder != null
-              ? widget.leadingBuilder!(value)
-              : null,
-          subtitle: widget.subtitleBuilder != null
-              ? widget.subtitleBuilder!(value)
-              : null,
-          isSelected: isSelected,
-          isEditing: isEditing,
-          onSelected: () {
-            _handleSelected(value);
-          },
-          onPressed: () {
-            _handleAddOrEdit(value);
-          },
+        child: KeyedSubtree(
+          key: trackDragSelection ? dragSelectionKey(value.key) : null,
+          child: SelectedDecorationListItem(
+            title: widget.titleBuilder(value),
+            leading: widget.leadingBuilder != null
+                ? widget.leadingBuilder!(value)
+                : null,
+            subtitle: widget.subtitleBuilder != null
+                ? widget.subtitleBuilder!(value)
+                : null,
+            isSelected: isSelected,
+            isEditing: isEditing,
+            onSelected: () {
+              _handleSelected(value);
+            },
+            onPressed: () {
+              _handleAddOrEdit(value);
+            },
+            onSelectionDragStart: trackDragSelection
+                ? (details) => startDragSelection(value.key, details)
+                : null,
+            onSelectionDragUpdate: trackDragSelection
+                ? updateDragSelection
+                : null,
+            onSelectionDragEnd: trackDragSelection ? endDragSelection : null,
+            onSelectionDragCancel: trackDragSelection ? endDragSelection : null,
+          ),
         ),
       ),
     );
@@ -621,7 +808,12 @@ class _MapInputPageState extends ConsumerState<MapInputPage> {
   Widget build(BuildContext context) {
     final appLocalizations = context.appLocalizations;
     final selectedItems = ref.watch(itemsProvider(_key));
+    final route = ModalRoute.of(context);
+    if (route is CommonRoute) {
+      route.updateCurrentResult(Map<String, String>.fromEntries(_items));
+    }
     return CommonPopScope(
+      canPop: route is CommonRoute && selectedItems.isEmpty,
       onPop: (_) {
         if (selectedItems.isNotEmpty) {
           ref.read(itemsProvider(_key).notifier).value = {};
@@ -698,6 +890,7 @@ class _MapInputPageState extends ConsumerState<MapInputPage> {
                       length: _items.length,
                       isSelected: selectedItems.contains(value.key),
                       isEditing: selectedItems.isNotEmpty,
+                      trackDragSelection: false,
                     ),
                     index,
                     animation,
@@ -705,6 +898,197 @@ class _MapInputPageState extends ConsumerState<MapInputPage> {
                 },
                 onReorderItem: _handleReorder,
               ),
+      ),
+    );
+  }
+}
+
+class MapEntryListDialog extends StatefulWidget {
+  final String title;
+  final Field keyField;
+  final List<String> values;
+  final String valueLabel;
+  final int? keyMaxLength;
+  final int? valueMaxLength;
+
+  const MapEntryListDialog({
+    super.key,
+    required this.title,
+    required this.keyField,
+    required this.values,
+    required this.valueLabel,
+    this.keyMaxLength,
+    this.valueMaxLength,
+  });
+
+  @override
+  State<MapEntryListDialog> createState() => _MapEntryListDialogState();
+}
+
+class _MapEntryListDialogState extends State<MapEntryListDialog> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  late final TextEditingController _keyController;
+  final List<TextEditingController> _valueControllers = [];
+  final List<FocusNode> _valueFocusNodes = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _keyController = TextEditingController(text: widget.keyField.value);
+    final values = widget.values.isEmpty ? const [''] : widget.values;
+    for (final value in values) {
+      _valueControllers.add(TextEditingController(text: value));
+      _valueFocusNodes.add(FocusNode());
+    }
+  }
+
+  void _addValue() {
+    setState(() {
+      _valueControllers.add(TextEditingController());
+      _valueFocusNodes.add(FocusNode());
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _valueFocusNodes.last.requestFocus();
+    });
+  }
+
+  void _removeValue(int index) {
+    if (_valueControllers.length == 1) {
+      _valueControllers.single.clear();
+      _valueFocusNodes.single.requestFocus();
+      return;
+    }
+    setState(() {
+      _valueControllers.removeAt(index).dispose();
+      _valueFocusNodes.removeAt(index).dispose();
+    });
+  }
+
+  void _handleValueSubmitted(int index) {
+    if (index == _valueControllers.length - 1) {
+      _addValue();
+      return;
+    }
+    _valueFocusNodes[index + 1].requestFocus();
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.of(context).pop<MapEntry<String, List<String>>>(
+      MapEntry(
+        _keyController.text,
+        _valueControllers.map((controller) => controller.text).toList(),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _keyController.dispose();
+    for (final controller in _valueControllers) {
+      controller.dispose();
+    }
+    for (final focusNode in _valueFocusNodes) {
+      focusNode.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appLocalizations = context.appLocalizations;
+    return CommonDialog(
+      title: widget.title,
+      maxWidth: 360,
+      actions: [
+        SizedBox(
+          width: double.infinity,
+          child: Row(
+            children: [
+              TextButton.icon(
+                onPressed: _addValue,
+                icon: const Icon(Icons.add),
+                label: Text(appLocalizations.add),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: Navigator.of(context).pop,
+                child: Text(appLocalizations.cancel),
+              ),
+              TextButton(
+                onPressed: _submit,
+                child: Text(appLocalizations.confirm),
+              ),
+            ],
+          ),
+        ),
+      ],
+      child: Form(
+        key: _formKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextFormField(
+              autofocus: true,
+              controller: _keyController,
+              maxLines: 3,
+              minLines: 1,
+              inputFormatters: widget.keyMaxLength == null
+                  ? null
+                  : TextInputLimits.limit(widget.keyMaxLength!),
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                labelText: widget.keyField.label,
+              ),
+              onFieldSubmitted: (_) {
+                _valueFocusNodes.first.requestFocus();
+              },
+              validator: (value) {
+                final validationError = widget.keyField.validator?.call(value);
+                if (validationError != null) return validationError;
+                if (value == null || value.isEmpty) {
+                  return appLocalizations.emptyTip(widget.keyField.label);
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+            for (var index = 0; index < _valueControllers.length; index++) ...[
+              TextFormField(
+                controller: _valueControllers[index],
+                focusNode: _valueFocusNodes[index],
+                inputFormatters: widget.valueMaxLength == null
+                    ? null
+                    : TextInputLimits.limit(widget.valueMaxLength!),
+                textInputAction: TextInputAction.next,
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  labelText: widget.valueLabel,
+                  suffixIcon: IconButton(
+                    tooltip: appLocalizations.delete,
+                    onPressed: () => _removeValue(index),
+                    icon: const Icon(Icons.delete_outline),
+                  ),
+                ),
+                onFieldSubmitted: (_) {
+                  _handleValueSubmitted(index);
+                },
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return appLocalizations.emptyTip(widget.valueLabel);
+                  }
+                  return null;
+                },
+              ),
+              if (index < _valueControllers.length - 1)
+                const SizedBox(height: 12),
+            ],
+          ],
+        ),
       ),
     );
   }

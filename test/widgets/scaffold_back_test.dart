@@ -207,7 +207,7 @@ void main() {
     expect(find.byType(TextField), findsOneWidget);
 
     await tester.binding.handlePopRoute();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.byType(TextField), findsNothing);
     expect(rootBackCount, 0);
@@ -219,6 +219,11 @@ void main() {
     final container = ProviderContainer();
     addTearDown(container.dispose);
     globalState.container = container;
+    final wasBackground = globalState.isBackground.value;
+    globalState.isBackground.value = true;
+    addTearDown(() {
+      globalState.isBackground.value = wasBackground;
+    });
     final isActive = ValueNotifier(true);
     addTearDown(isActive.dispose);
 
@@ -308,8 +313,6 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 301));
 
-    await tester.tap(find.byIcon(Icons.more_vert));
-    await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.search));
     await tester.pumpAndSettle();
     expect(find.byType(TextField), findsOneWidget);

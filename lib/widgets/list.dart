@@ -2,9 +2,9 @@ import 'package:collection/collection.dart';
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/providers/app.dart';
+import 'package:fl_clash/providers/config.dart';
 import 'package:fl_clash/state.dart';
 import 'package:fl_clash/widgets/inherited.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'card.dart';
@@ -24,8 +24,13 @@ final class _DefaultAction extends _ListItemAction {
 final class _RadioAction<T> extends _ListItemAction {
   final T value;
   final VoidCallback? onTap;
+  final bool excludeFocus;
 
-  const _RadioAction({required this.value, this.onTap});
+  const _RadioAction({
+    required this.value,
+    this.onTap,
+    this.excludeFocus = false,
+  });
 }
 
 final class _ToggleAction extends _ListItemAction {
@@ -121,6 +126,8 @@ class ListItem<T> extends StatelessWidget {
   final double? minTileHeight;
   final VisualDensity? visualDensity;
   final void Function()? onTap;
+  final void Function()? onLongPress;
+  final void Function(TapDownDetails)? onSecondaryTapDown;
 
   const ListItem({
     super.key,
@@ -132,6 +139,8 @@ class ListItem<T> extends StatelessWidget {
     this.horizontalTitleGap,
     this.dense,
     this.onTap,
+    this.onLongPress,
+    this.onSecondaryTapDown,
     this.titleTextStyle,
     this.subtitleTextStyle,
     this.color,
@@ -169,7 +178,9 @@ class ListItem<T> extends StatelessWidget {
          forceFull: forceFull,
          onChanged: onChanged,
        ),
-       onTap = null;
+       onTap = null,
+       onLongPress = null,
+       onSecondaryTapDown = null;
 
   ListItem.next({
     super.key,
@@ -191,7 +202,9 @@ class ListItem<T> extends StatelessWidget {
     this.minVerticalPadding = 12,
     this.tileTitleAlignment = ListTileTitleAlignment.center,
   }) : _action = _NextAction(widget: widget, maxWidth: maxWidth, blur: blur),
-       onTap = null;
+       onTap = null,
+       onLongPress = null,
+       onSecondaryTapDown = null;
 
   ListItem.options({
     super.key,
@@ -221,7 +234,9 @@ class ListItem<T> extends StatelessWidget {
          textBuilder: textBuilder,
          onChanged: onChanged,
        ),
-       onTap = null;
+       onTap = null,
+       onLongPress = null,
+       onSecondaryTapDown = null;
 
   ListItem.input({
     super.key,
@@ -257,7 +272,9 @@ class ListItem<T> extends StatelessWidget {
          keyboardType: keyboardType,
          resetValue: resetValue,
        ),
-       onTap = null;
+       onTap = null,
+       onLongPress = null,
+       onSecondaryTapDown = null;
 
   ListItem.checkbox({
     super.key,
@@ -278,7 +295,9 @@ class ListItem<T> extends StatelessWidget {
     this.tileTitleAlignment = ListTileTitleAlignment.center,
   }) : _action = _CheckboxAction(value: value, onChanged: onChanged),
        trailing = null,
-       onTap = null;
+       onTap = null,
+       onLongPress = null,
+       onSecondaryTapDown = null;
 
   ListItem.toggle({
     super.key,
@@ -299,7 +318,9 @@ class ListItem<T> extends StatelessWidget {
     this.tileTitleAlignment = ListTileTitleAlignment.center,
   }) : _action = _ToggleAction(value: value, onChanged: onChanged),
        trailing = null,
-       onTap = null;
+       onTap = null,
+       onLongPress = null,
+       onSecondaryTapDown = null;
 
   ListItem.radio({
     super.key,
@@ -309,6 +330,7 @@ class ListItem<T> extends StatelessWidget {
     this.padding = const EdgeInsets.only(left: 12, right: 16),
     required T value,
     VoidCallback? onTap,
+    bool excludeFocus = false,
     this.horizontalTitleGap = 8,
     this.dense,
     this.titleTextStyle,
@@ -318,16 +340,22 @@ class ListItem<T> extends StatelessWidget {
     this.visualDensity,
     this.minVerticalPadding = 12,
     this.tileTitleAlignment = ListTileTitleAlignment.center,
-  }) : _action = _RadioAction<T>(value: value, onTap: onTap),
+  }) : _action = _RadioAction<T>(
+         value: value,
+         onTap: onTap,
+         excludeFocus: excludeFocus,
+       ),
        leading = null,
-       onTap = null;
+       onTap = null,
+       onLongPress = null,
+       onSecondaryTapDown = null;
 
   Widget _buildListTile({
     void Function()? onTap,
     Widget? trailing,
     Widget? leading,
   }) {
-    return ListTile(
+    final tile = ListTile(
       key: key,
       dense: dense,
       visualDensity: visualDensity,
@@ -342,9 +370,14 @@ class ListItem<T> extends StatelessWidget {
       subtitle: subtitle,
       titleAlignment: tileTitleAlignment,
       onTap: onTap,
+      onLongPress: onLongPress,
       trailing: trailing ?? this.trailing,
       contentPadding: padding,
     );
+    if (onSecondaryTapDown == null) {
+      return tile;
+    }
+    return GestureDetector(onSecondaryTapDown: onSecondaryTapDown, child: tile);
   }
 
   @override
@@ -357,7 +390,12 @@ class ListItem<T> extends StatelessWidget {
           closedBuilder: (context, action) {
             Future<void> openAction() async {
               final isMobile = globalState.container.read(isMobileViewProvider);
-              if (!isMobile || kDebugMode) {
+              final themeProps = globalState.container.read(
+                themeSettingProvider,
+              );
+              if (!isMobile ||
+                  themeProps.predictiveBack ||
+                  Theme.of(context).platform == TargetPlatform.iOS) {
                 final res = await showExtend(
                   context,
                   props: ExtendProps(
@@ -461,14 +499,17 @@ class ListItem<T> extends StatelessWidget {
         );
       case final _RadioAction radio:
         final radioDelegate = radio as _RadioAction<T>;
+        final child = Radio<T>(
+          visualDensity: VisualDensity.compact,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          value: radioDelegate.value,
+          toggleable: true,
+        );
         return _buildListTile(
           onTap: radioDelegate.onTap,
-          leading: Radio<T>(
-            visualDensity: VisualDensity.compact,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            value: radioDelegate.value,
-            toggleable: true,
-          ),
+          leading: radioDelegate.excludeFocus
+              ? ExcludeFocus(child: child)
+              : child,
           trailing: trailing,
         );
       case _DefaultAction():
@@ -729,8 +770,8 @@ class DecorationListItem extends StatelessWidget {
       ItemPosition.startAndEnd,
     ].contains(position);
     final borderRadius = BorderRadius.vertical(
-      top: isStart ? const Radius.circular(24) : Radius.zero,
-      bottom: isEnd ? const Radius.circular(24) : Radius.zero,
+      top: isStart ? const Radius.circular(16) : Radius.zero,
+      bottom: isEnd ? const Radius.circular(16) : Radius.zero,
     );
     return CommonCard(
       shape: proxyDecorator == true
@@ -784,6 +825,10 @@ class SelectedDecorationListItem extends StatelessWidget {
   final Widget? leading;
   final bool invalid;
   final double? minVerticalPadding;
+  final GestureLongPressStartCallback? onSelectionDragStart;
+  final GestureLongPressMoveUpdateCallback? onSelectionDragUpdate;
+  final GestureLongPressEndCallback? onSelectionDragEnd;
+  final VoidCallback? onSelectionDragCancel;
 
   const SelectedDecorationListItem({
     super.key,
@@ -797,6 +842,10 @@ class SelectedDecorationListItem extends StatelessWidget {
     this.minVerticalPadding,
     this.subtitle,
     this.leading,
+    this.onSelectionDragStart,
+    this.onSelectionDragUpdate,
+    this.onSelectionDragEnd,
+    this.onSelectionDragCancel,
   });
 
   @override
@@ -817,12 +866,19 @@ class SelectedDecorationListItem extends StatelessWidget {
         onPressed();
       },
       subtitle: subtitle,
-      trailing: CommonCheckBox(
-        value: isSelected,
-        isCircle: true,
-        onChanged: (_) {
-          onSelected();
-        },
+      trailing: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onLongPressStart: onSelectionDragStart,
+        onLongPressMoveUpdate: onSelectionDragUpdate,
+        onLongPressEnd: onSelectionDragEnd,
+        onLongPressCancel: onSelectionDragCancel,
+        child: CommonCheckBox(
+          value: isSelected,
+          isCircle: true,
+          onChanged: (_) {
+            onSelected();
+          },
+        ),
       ),
     );
   }

@@ -7,7 +7,9 @@ import 'package:fl_clash/models/common.dart';
 import 'package:fl_clash/providers/app.dart';
 import 'package:fl_clash/state.dart';
 import 'package:fl_clash/widgets/widgets.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -330,6 +332,115 @@ void main() {
     expect(find.text('No data'), findsOneWidget);
   });
 
+  testWidgets('ListInputPage applies inverse start state to its drag range', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: _TestApp(
+          child: ListInputPage(
+            title: 'Items',
+            items: ['a', 'b', 'c', 'd'],
+            titleBuilder: _textBuilder,
+          ),
+        ),
+      ),
+    );
+
+    final checkboxes = find.byType(Checkbox);
+    final selectGesture = await tester.startGesture(
+      tester.getCenter(checkboxes.first),
+    );
+    await tester.pump(kLongPressTimeout);
+    await selectGesture.moveTo(tester.getCenter(checkboxes.last));
+    await tester.pump();
+
+    expect(
+      List.generate(
+        4,
+        (index) => tester.widget<Checkbox>(checkboxes.at(index)).value,
+      ),
+      [true, true, true, true],
+    );
+
+    await selectGesture.moveTo(tester.getCenter(checkboxes.at(1)));
+    await selectGesture.up();
+    await tester.pump();
+
+    expect(
+      List.generate(
+        4,
+        (index) => tester.widget<Checkbox>(checkboxes.at(index)).value,
+      ),
+      [true, true, false, false],
+    );
+
+    final mixedGesture = await tester.startGesture(
+      tester.getCenter(checkboxes.at(1)),
+    );
+    await tester.pump(kLongPressTimeout);
+    await mixedGesture.moveTo(tester.getCenter(checkboxes.at(2)));
+    await mixedGesture.up();
+    await tester.pump();
+
+    expect(
+      List.generate(
+        4,
+        (index) => tester.widget<Checkbox>(checkboxes.at(index)).value,
+      ),
+      [true, false, false, false],
+    );
+
+    final reverseGesture = await tester.startGesture(
+      tester.getCenter(checkboxes.at(1)),
+    );
+    await tester.pump(kLongPressTimeout);
+    await reverseGesture.moveTo(tester.getCenter(checkboxes.at(2)));
+    await reverseGesture.up();
+    await tester.pump();
+
+    expect(
+      List.generate(
+        4,
+        (index) => tester.widget<Checkbox>(checkboxes.at(index)).value,
+      ),
+      [true, true, true, false],
+    );
+  });
+
+  testWidgets('ListInputPage scrolls when dragging from a checkbox', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: _TestApp(
+          child: ListInputPage(
+            title: 'Items',
+            items: List.generate(20, (index) => 'item $index'),
+            titleBuilder: _textBuilder,
+          ),
+        ),
+      ),
+    );
+
+    final scrollable = tester.state<ScrollableState>(
+      find.descendant(
+        of: find.byType(ReorderableListView),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.drag(find.byType(Checkbox).first, const Offset(0, -200));
+    await tester.pumpAndSettle();
+
+    expect(scrollable.position.pixels, greaterThan(0));
+    expect(find.byIcon(Icons.delete), findsNothing);
+  });
+
   testWidgets('MapInputPage adds, reorders, selects, and deletes entries', (
     tester,
   ) async {
@@ -377,6 +488,299 @@ void main() {
     expect(find.text('No data'), findsOneWidget);
   });
 
+  testWidgets('MapInputPage drag-selects consecutive entries', (tester) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: _TestApp(
+          child: MapInputPage(
+            title: 'Map',
+            map: {'a': '1', 'b': '2', 'c': '3', 'd': '4'},
+            titleBuilder: _entryTitle,
+          ),
+        ),
+      ),
+    );
+
+    final checkboxes = find.byType(Checkbox);
+    final gesture = await tester.startGesture(
+      tester.getCenter(checkboxes.first),
+    );
+    await tester.pump(kLongPressTimeout);
+    await gesture.moveTo(tester.getCenter(checkboxes.at(2)));
+    await gesture.up();
+    await tester.pump();
+
+    expect(
+      List.generate(
+        4,
+        (index) => tester.widget<Checkbox>(checkboxes.at(index)).value,
+      ),
+      [true, true, true, false],
+    );
+  });
+
+  testWidgets('MapInputPage edits list values in one dialog', (tester) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: _TestApp(
+          child: MapInputPage(
+            title: 'Policies',
+            map: {'example.com': '1.1.1.1,8.8.8.8'},
+            keyLabel: 'Domain',
+            valueLabel: 'Nameserver',
+            valueParser: _splitValues,
+            valueSerializer: _joinValues,
+            titleBuilder: _entryTitle,
+            subtitleBuilder: _entrySubtitle,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('example.com').first);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MapEntryListDialog), findsOneWidget);
+    expect(find.byType(TextFormField), findsNWidgets(3));
+    expect(find.text('1.1.1.1'), findsOneWidget);
+    expect(find.text('8.8.8.8'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(TextFormField).at(1),
+        matching: find.byIcon(Icons.delete_outline),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: find.byType(Form), matching: find.text('Add')),
+      findsNothing,
+    );
+    expect(
+      tester
+          .getCenter(
+            find.descendant(
+              of: find.byType(MapEntryListDialog),
+              matching: find.text('Add'),
+            ),
+          )
+          .dx,
+      lessThan(tester.getCenter(find.text('Cancel')).dx),
+    );
+    await tester.tap(
+      find
+          .descendant(
+            of: find.byType(MapEntryListDialog),
+            matching: find.byIcon(Icons.delete_outline),
+          )
+          .first,
+    );
+    await tester.pump();
+    expect(find.byType(TextFormField), findsNWidgets(2));
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(MapEntryListDialog),
+        matching: find.text('Add'),
+      ),
+    );
+    await tester.pump();
+    expect(find.byType(TextFormField), findsNWidgets(3));
+    await tester.enterText(find.byType(TextFormField).last, '9.9.9.9');
+    await tester.tap(find.text('Confirm'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MapEntryListDialog), findsNothing);
+    expect(find.text('8.8.8.8,9.9.9.9'), findsOneWidget);
+
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+    expect(find.byType(MapEntryListDialog), findsOneWidget);
+    await tester.tap(find.text('Confirm'));
+    await tester.pump();
+    expect(find.byType(MapEntryListDialog), findsOneWidget);
+
+    final fields = find.byType(TextFormField);
+    await tester.enterText(fields.first, 'new.example.com');
+    await tester.enterText(fields.last, '4.4.4.4');
+    await tester.tap(find.text('Confirm'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('new.example.com'), findsOneWidget);
+    expect(find.text('4.4.4.4'), findsOneWidget);
+
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.byType(MapEntryListDialog), findsNothing);
+    expect(find.text('new.example.com'), findsOneWidget);
+  });
+
+  testWidgets('MapInputPage returns latest entries with iOS edge swipe', (
+    tester,
+  ) async {
+    Map<String, String>? result;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.iOS),
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.delegate.supportedLocales,
+          builder: (context, child) {
+            globalState.measure = Measure.of(context, 1);
+            globalState.theme = CommonTheme.of(context, 1);
+            return child!;
+          },
+          home: Builder(
+            builder: (context) {
+              return Scaffold(
+                body: FilledButton(
+                  onPressed: () async {
+                    result = await Navigator.of(context).push(
+                      CommonRoute<Map<String, String>>(
+                        builder: (_) {
+                          return const MapInputPage(
+                            title: 'Map',
+                            map: {'a': '1', 'b': '2'},
+                            titleBuilder: _entryTitle,
+                          );
+                        },
+                      ),
+                    );
+                  },
+                  child: const Text('Open'),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+
+    final listView = tester.widget<ReorderableListView>(
+      find.byType(ReorderableListView),
+    );
+    listView.onReorderItem!(0, 1);
+    await tester.pump();
+
+    await tester.dragFrom(const Offset(5, 300), const Offset(500, 0));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Open'), findsOneWidget);
+    expect(result, {'b': '2', 'a': '1'});
+  });
+
+  for (final commit in [true, false]) {
+    testWidgets(
+      'MapInputPage ${commit ? 'commits' : 'cancels'} Android predictive back',
+      (tester) async {
+        Map<String, String>? result;
+        var completed = false;
+
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              theme: ThemeData(
+                platform: TargetPlatform.android,
+                pageTransitionsTheme: const PageTransitionsTheme(
+                  builders: {
+                    TargetPlatform.android:
+                        PredictiveBackPageTransitionsBuilder(),
+                  },
+                ),
+              ),
+              localizationsDelegates: const [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+              ],
+              supportedLocales: AppLocalizations.delegate.supportedLocales,
+              builder: (context, child) {
+                globalState.measure = Measure.of(context, 1);
+                globalState.theme = CommonTheme.of(context, 1);
+                return child!;
+              },
+              home: Builder(
+                builder: (context) {
+                  return Scaffold(
+                    body: FilledButton(
+                      onPressed: () async {
+                        result = await Navigator.of(context).push(
+                          CommonRoute<Map<String, String>>(
+                            builder: (_) {
+                              return const MapInputPage(
+                                title: 'Map',
+                                map: {'a': '1', 'b': '2'},
+                                titleBuilder: _entryTitle,
+                              );
+                            },
+                          ),
+                        );
+                        completed = true;
+                      },
+                      child: const Text('Open'),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        final listView = tester.widget<ReorderableListView>(
+          find.byType(ReorderableListView),
+        );
+        listView.onReorderItem!(0, 1);
+        await tester.pump();
+
+        await _sendBackGesture('startBackGesture', {
+          'touchOffset': <double>[5, 300],
+          'progress': 0.0,
+          'swipeEdge': 0,
+        });
+        await tester.pump();
+        expect(_predictiveBackTransition, findsOneWidget);
+
+        await _sendBackGesture('updateBackGestureProgress', {
+          'touchOffset': <double>[100, 300],
+          'progress': 0.35,
+          'swipeEdge': 0,
+        });
+        await tester.pump();
+        await _sendBackGesture(
+          commit ? 'commitBackGesture' : 'cancelBackGesture',
+        );
+        await tester.pumpAndSettle();
+
+        if (commit) {
+          expect(find.text('Open'), findsOneWidget);
+          expect(completed, isTrue);
+          expect(result, {'b': '2', 'a': '1'});
+        } else {
+          expect(find.byType(MapInputPage), findsOneWidget);
+          expect(completed, isFalse);
+          expect(
+            tester.getTopLeft(find.text('b').first).dy,
+            lessThan(tester.getTopLeft(find.text('a').first).dy),
+          );
+        }
+      },
+    );
+  }
+
   test('NoInputBorder implements border geometry and interior painting', () {
     const border = NoInputBorder();
     const rect = Rect.fromLTWH(1, 2, 30, 40);
@@ -397,6 +801,22 @@ void main() {
   });
 }
 
+Finder get _predictiveBackTransition => find.byWidgetPredicate(
+  (widget) =>
+      '${widget.runtimeType}' == '_PredictiveBackSharedElementPageTransition',
+);
+
+Future<void> _sendBackGesture(
+  String method, [
+  Map<String, dynamic>? arguments,
+]) async {
+  final message = const StandardMethodCodec().encodeMethodCall(
+    MethodCall(method, arguments),
+  );
+  await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .handlePlatformMessage('flutter/backgesture', message, (_) {});
+}
+
 String _optionText(String value) => value;
 
 Widget _textBuilder(String value) {
@@ -406,6 +826,10 @@ Widget _textBuilder(String value) {
 Widget _entryTitle(MapEntry<String, String> value) => Text(value.key);
 
 Widget _entrySubtitle(MapEntry<String, String> value) => Text(value.value);
+
+List<String> _splitValues(String value) => value.split(',');
+
+String _joinValues(List<String> values) => values.join(',');
 
 double _top(WidgetTester tester, String text) {
   return tester.getTopLeft(find.text(text)).dy;

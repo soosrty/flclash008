@@ -81,7 +81,11 @@ class CommonPopupRoute<T> extends PopupRoute<T> {
   }
 
   @override
-  Duration get transitionDuration => const Duration(milliseconds: 250);
+  Duration get transitionDuration => const Duration(milliseconds: 180);
+
+  static void closeAll(BuildContext context) {
+    Navigator.of(context).popUntil((route) => route is! CommonPopupRoute);
+  }
 }
 
 class PopupController extends ValueNotifier<bool> {
@@ -96,7 +100,10 @@ class PopupController extends ValueNotifier<bool> {
   }
 }
 
-typedef PopupOpen = Function({Offset offset});
+typedef PopupOpen = void Function({
+  Offset offset,
+  BuildContext? targetContext,
+});
 
 class CommonPopupBox extends StatefulWidget {
   final Widget Function(PopupOpen open) targetBuilder;
@@ -116,9 +123,11 @@ class _CommonPopupBoxState extends State<CommonPopupBox> {
   bool _isOpen = false;
   final _targetOffsetValueNotifier = ValueNotifier<Offset>(Offset.zero);
   Offset _offset = Offset.zero;
+  BuildContext? _targetContext;
 
-  void _open({Offset offset = Offset.zero}) {
+  void _open({Offset offset = Offset.zero, BuildContext? targetContext}) {
     _offset = offset;
+    _targetContext = targetContext;
     _updateOffset();
     _isOpen = true;
     Navigator.of(context)
@@ -133,20 +142,27 @@ class _CommonPopupBoxState extends State<CommonPopupBox> {
         )
         .then((_) {
           _isOpen = false;
+          _targetContext = null;
         });
   }
 
   void _updateOffset() {
-    final renderBox = context.findRenderObject() as RenderBox?;
-    if (renderBox == null) {
+    final renderContext = _targetContext ?? context;
+    if (!renderContext.mounted) {
+      return;
+    }
+    final renderObject = renderContext.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
       return;
     }
     final viewPadding = MediaQuery.of(context).viewPadding;
-    _targetOffsetValueNotifier.value = renderBox
-        .localToGlobal(
-          Offset.zero.translate(viewPadding.right, viewPadding.top),
-        )
-        .translate(_offset.dx, _offset.dy);
+    final targetOffset = _targetContext == null
+        ? _offset
+        : _offset.translate(renderObject.size.width - 48, 0);
+    _targetOffsetValueNotifier.value = renderObject
+        .localToGlobal(Offset.zero)
+        .translate(-viewPadding.left, -viewPadding.top)
+        .translate(targetOffset.dx, targetOffset.dy);
   }
 
   @override
@@ -248,6 +264,28 @@ class _CommonPopupMenuItemsState extends State<_CommonPopupMenuItems> {
   List<PopupMenuItemData> _nextItems = [];
   String? _subTitle;
   bool _status = false;
+  late Set<String> _selectedLabels;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedLabels = _getSelectedLabels(widget.items);
+  }
+
+  @override
+  void didUpdateWidget(covariant _CommonPopupMenuItems oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.items != widget.items) {
+      _selectedLabels = _getSelectedLabels(widget.items);
+    }
+  }
+
+  Set<String> _getSelectedLabels(List<PopupMenuItemData> items) {
+    return items
+        .where((item) => item.selected)
+        .map((item) => item.label)
+        .toSet();
+  }
 
   Widget _popupMenuItem(
     BuildContext context, {
@@ -264,6 +302,8 @@ class _CommonPopupMenuItemsState extends State<_CommonPopupMenuItems> {
           }
         : item.onPressed;
     final disabled = onPressed == null;
+    final selected = _selectedLabels.contains(item.label);
+    final selectable = !item.closeOnPressed || item.selected;
     final color = item.danger
         ? context.colorScheme.onError
         : context.colorScheme.onSurface;
@@ -280,10 +320,19 @@ class _CommonPopupMenuItemsState extends State<_CommonPopupMenuItems> {
       ),
       onPressed: onPressed != null
           ? () {
-              if (item.subItems.isEmpty) {
+              if (item.subItems.isEmpty && item.closeOnPressed) {
                 Navigator.of(context).pop();
               }
               onPressed();
+              if (item.subItems.isEmpty && !item.closeOnPressed) {
+                setState(() {
+                  if (selected) {
+                    _selectedLabels.remove(item.label);
+                  } else {
+                    _selectedLabels.add(item.label);
+                  }
+                });
+              }
             }
           : null,
       child: Container(
@@ -297,6 +346,20 @@ class _CommonPopupMenuItemsState extends State<_CommonPopupMenuItems> {
         child: Row(
           mainAxisSize: MainAxisSize.max,
           children: [
+            if (selectable) ...[
+              SizedBox(
+                width: widget.fontSize + 4,
+                child: Opacity(
+                  opacity: selected ? 1 : 0,
+                  child: Icon(
+                    Icons.check,
+                    size: widget.fontSize + 4,
+                    color: foregroundColor,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+            ],
             if (item.icon != null) ...[
               Icon(
                 item.icon,
@@ -389,7 +452,7 @@ class _CommonPopupMenuItemsState extends State<_CommonPopupMenuItems> {
       crossSlideState: _status
           ? CrossSlideState.showSecond
           : CrossSlideState.showFirst,
-      duration: const Duration(milliseconds: 250),
+      duration: const Duration(milliseconds: 120),
     );
   }
 }

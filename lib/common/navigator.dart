@@ -1,16 +1,8 @@
 import 'package:animations/animations.dart';
-import 'package:fl_clash/common/common.dart';
-import 'package:fl_clash/providers/app.dart';
-import 'package:fl_clash/state.dart';
 import 'package:flutter/material.dart';
 
 class BaseNavigator {
   static Future<T?> push<T>(BuildContext context, Widget child) async {
-    if (!globalState.container.read(isMobileViewProvider)) {
-      return Navigator.of(
-        context,
-      ).push<T>(CommonDesktopRoute(builder: (context) => child));
-    }
     return Navigator.of(
       context,
     ).push<T>(CommonRoute(builder: (context) => child));
@@ -22,80 +14,41 @@ const commonSharedXPageTransitions = SharedAxisPageTransitionsBuilder(
   fillColor: Colors.transparent,
 );
 
-class CommonDesktopRoute<T> extends PageRoute<T> {
-  final Widget Function(BuildContext context) builder;
+const commonDesktopFadePageTransitions =
+    CommonDesktopFadePageTransitionsBuilder();
 
-  CommonDesktopRoute({required this.builder});
-
-  @override
-  Color? get barrierColor => null;
+class CommonDesktopFadePageTransitionsBuilder extends PageTransitionsBuilder {
+  const CommonDesktopFadePageTransitionsBuilder();
 
   @override
-  String? get barrierLabel => null;
+  Duration get transitionDuration => const Duration(milliseconds: 150);
 
   @override
-  Widget buildPage(
+  Duration get reverseTransitionDuration => const Duration(milliseconds: 100);
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
     BuildContext context,
     Animation<double> animation,
     Animation<double> secondaryAnimation,
+    Widget child,
   ) {
-    final Widget result = builder(context);
-    return Semantics(
-      scopesRoute: true,
-      explicitChildNodes: true,
-      child: FadeTransition(opacity: animation, child: result),
-    );
+    return FadeTransition(opacity: animation, child: child);
   }
-
-  @override
-  bool get maintainState => true;
-
-  @override
-  Duration get transitionDuration => const Duration(milliseconds: 200);
-
-  @override
-  Duration get reverseTransitionDuration => const Duration(milliseconds: 200);
 }
 
-class CommonRoute<T> extends PageRoute<T> {
-  final Widget Function(BuildContext context) builder;
+class CommonRoute<T> extends MaterialPageRoute<T> {
+  T? _currentResult;
 
-  CommonRoute({required this.builder});
+  CommonRoute({required super.builder});
 
-  @override
-  Color? get barrierColor => null;
-
-  @override
-  String? get barrierLabel => null;
-
-  @override
-  bool get maintainState => true;
-
-  @override
-  Widget buildPage(
-    BuildContext context,
-    Animation<double> animation,
-    Animation<double> secondaryAnimation,
-  ) {
-    final Widget result = builder(context);
-    return Semantics(
-      scopesRoute: true,
-      explicitChildNodes: true,
-      child: SharedAxisTransition(
-        animation: animation,
-        secondaryAnimation: secondaryAnimation,
-        transitionType: SharedAxisTransitionType.horizontal,
-        fillColor: context.colorScheme.surface,
-        child: result,
-      ),
-    );
+  void updateCurrentResult(Object? result) {
+    _currentResult = result as T?;
   }
 
   @override
-  Duration get transitionDuration => const Duration(milliseconds: 300);
-
-  @override
-  Duration get reverseTransitionDuration => const Duration(milliseconds: 300);
+  T? get currentResult => _currentResult ?? super.currentResult;
 }
 
 final Animatable<Offset> _kRightMiddleTween = Tween<Offset>(

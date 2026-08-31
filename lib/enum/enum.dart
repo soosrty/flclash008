@@ -15,7 +15,8 @@ enum SupportPlatform {
   Windows,
   MacOS,
   Linux,
-  Android;
+  Android,
+  IOS;
 
   static SupportPlatform get currentPlatform {
     if (system.isWindows) {
@@ -26,6 +27,8 @@ enum SupportPlatform {
       return SupportPlatform.Linux;
     } else if (system.isAndroid) {
       return SupportPlatform.Android;
+    } else if (system.isIOS) {
+      return SupportPlatform.IOS;
     }
     throw 'invalid platform';
   }
@@ -97,7 +100,15 @@ enum ViewMode { mobile, laptop, desktop }
 
 enum LogLevel { debug, info, warning, error, silent }
 
+enum LogSource { app, core }
+
 extension LogLevelExt on LogLevel {
+  bool allows(LogLevel level) {
+    return this != LogLevel.silent &&
+        level != LogLevel.silent &&
+        level.index >= index;
+  }
+
   Color? color(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return switch (this) {
@@ -120,6 +131,20 @@ enum Network { tcp, udp }
 
 enum ProxiesSortType { none, delay, name }
 
+enum TrackerInfoSortType {
+  start,
+  uploadTraffic,
+  downloadTraffic,
+  uploadSpeed,
+  downloadSpeed,
+  destination,
+  process,
+  port,
+  network,
+  rule,
+  proxyChains,
+}
+
 enum TunStack { gvisor, system, mixed }
 
 enum AccessControlMode { acceptSelected, rejectSelected }
@@ -137,6 +162,8 @@ enum ResultType {
 
 enum CoreEventType { log, delay, request, loaded, crash, geoUpdate }
 
+enum ManagedPathScope { profiles, providers, scripts }
+
 enum InvokeMessageType { protect, process }
 
 enum FindProcessMode { always, off }
@@ -151,26 +178,20 @@ enum ProxiesType { tab, list }
 
 enum ProxiesLayout { loose, standard, tight }
 
-enum ProxyCardType { expand, shrink, min }
+enum ProxiesListHeaderStyle { loose, standard, tight }
 
+enum ProxyCardType { standard, shrink, min }
+
+@JsonEnum(valueField: 'value')
 enum DnsMode {
-  normal,
-  @JsonValue('fake-ip')
-  fakeIp,
-  @JsonValue('redir-host')
-  redirHost,
-  hosts,
-}
-
-enum ExternalControllerStatus {
-  @JsonValue('')
-  close(''),
-  @JsonValue('127.0.0.1:9090')
-  open('127.0.0.1:9090');
+  normal('normal'),
+  fakeIp('fake-ip'),
+  redirHost('redir-host'),
+  hosts('hosts');
 
   final String value;
 
-  const ExternalControllerStatus(this.value);
+  const DnsMode(this.value);
 }
 
 enum KeyboardModifier {
@@ -203,6 +224,8 @@ enum HotAction { start, view, mode, proxy, tun }
 
 enum ProxiesIconStyle { none, standard, icon }
 
+enum ProxiesIconSource { standard, config, emoji }
+
 enum FontFamily {
   twEmoji('Twemoji'),
   jetBrainsMono('JetBrainsMono'),
@@ -229,10 +252,10 @@ enum FunctionTag {
   changeProxy,
   checkIp,
   handleWill,
+  handleBack,
   updateDelay,
   vpnTip,
   autoLaunch,
-  renderPause,
   updatePageIndex,
   pageChange,
   proxiesTabChange,
@@ -243,6 +266,8 @@ enum FunctionTag {
   saveSharedFile,
   removeProxy,
   suspend,
+  tickerPause,
+  tickerResume,
 }
 
 enum DashboardWidget {
@@ -264,7 +289,9 @@ enum DashboardWidget {
     platforms: desktopPlatforms,
   ),
   intranetIp(GridItem(crossAxisCellCount: 4, child: IntranetIP())),
-  memoryInfo(GridItem(crossAxisCellCount: 4, child: MemoryInfo()));
+  memoryInfo(GridItem(crossAxisCellCount: 4, child: MemoryInfo())),
+  goroutineInfo(GridItem(crossAxisCellCount: 4, child: GoroutineInfo())),
+  connectionInfo(GridItem(crossAxisCellCount: 4, child: ConnectionInfo()));
 
   final GridItem widget;
   final List<SupportPlatform> platforms;
@@ -281,6 +308,8 @@ enum DashboardWidget {
 }
 
 enum GeodataLoader { standard, memconservative }
+
+enum GeositeMatcher { succinct, mph }
 
 enum GeoResource {
   @JsonValue('mmdb')
@@ -324,6 +353,7 @@ enum PageLabel {
   logs,
   requests,
   resources,
+  networking,
   connections,
 }
 

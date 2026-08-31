@@ -9,6 +9,7 @@ import 'package:fl_clash/manager/manager.dart';
 import 'package:fl_clash/plugins/app.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/state.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -27,14 +28,25 @@ class ApplicationState extends ConsumerState<Application> {
   Timer? _autoUpdateProfilesTaskTimer;
   bool _preHasVpn = false;
 
-  final _pageTransitionsTheme = const PageTransitionsTheme(
-    builders: <TargetPlatform, PageTransitionsBuilder>{
-      TargetPlatform.android: commonSharedXPageTransitions,
-      TargetPlatform.windows: commonSharedXPageTransitions,
-      TargetPlatform.linux: commonSharedXPageTransitions,
-      TargetPlatform.macOS: commonSharedXPageTransitions,
-    },
-  );
+  PageTransitionsTheme _getPageTransitionsTheme({
+    required bool predictiveBack,
+    required bool isMobile,
+  }) {
+    final pageTransitions = isMobile
+        ? commonSharedXPageTransitions
+        : commonDesktopFadePageTransitions;
+    return PageTransitionsTheme(
+      builders: <TargetPlatform, PageTransitionsBuilder>{
+        TargetPlatform.android: predictiveBack
+            ? const PredictiveBackPageTransitionsBuilder()
+            : pageTransitions,
+        TargetPlatform.windows: pageTransitions,
+        TargetPlatform.linux: pageTransitions,
+        TargetPlatform.macOS: pageTransitions,
+        TargetPlatform.iOS: const CupertinoPageTransitionsBuilder(),
+      },
+    );
+  }
 
   ColorScheme _getAppColorScheme({
     required Brightness brightness,
@@ -97,8 +109,11 @@ class ApplicationState extends ConsumerState<Application> {
           child: HotKeyManager(child: ProxyManager(child: child)),
         ),
       );
+    } else if (system.isMobile) {
+      return MobileManager(child: TileManager(child: child));
+    } else {
+      return child;
     }
-    return AndroidManager(child: TileManager(child: child));
   }
 
   Widget _buildState({required Widget child}) {
@@ -109,7 +124,8 @@ class ApplicationState extends ConsumerState<Application> {
             commonPrint.log('connectivityChanged ${results.toString()}');
             ref.read(systemActionProvider.notifier).updateLocalIp();
             final hasVpn = results.contains(ConnectivityResult.vpn);
-            if (_preHasVpn == hasVpn) {
+            final isStart = ref.read(isStartProvider);
+            if (_preHasVpn == hasVpn && !isStart) {
               ref.read(checkIpNumProvider.notifier).add();
             }
             _preHasVpn = hasVpn;
@@ -124,11 +140,16 @@ class ApplicationState extends ConsumerState<Application> {
     if (system.isDesktop) {
       return WindowHeaderContainer(child: child);
     }
-    return VpnManager(child: child);
+    if (system.isAndroid) {
+      return VpnManager(child: child);
+    }
+    return child;
   }
 
   Widget _buildApp({required Widget child}) {
-    return StatusManager(child: ThemeManager(child: child));
+    return StatusManager(
+      child: ThemeManager(child: BackManager(child: child)),
+    );
   }
 
   @override
@@ -139,47 +160,65 @@ class ApplicationState extends ConsumerState<Application> {
           appSettingProvider.select((state) => state.locale),
         );
         final themeProps = ref.watch(themeSettingProvider);
-        return MaterialApp(
-          debugShowCheckedModeBanner: false,
-          navigatorKey: globalState.navigatorKey,
-          onNavigationNotification: (_) => true,
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-          ],
-          builder: (_, child) {
-            return AppEnvManager(
-              child: _buildApp(
-                child: _buildPlatformState(
-                  child: _buildState(child: _buildPlatformApp(child: child!)),
+        final supportsPredictiveBack = system.supportsPredictiveBack(
+          ref.watch(versionProvider),
+        );
+        final isMobile = ref.watch(isMobileViewProvider);
+        final pageTransitionsTheme = _getPageTransitionsTheme(
+          predictiveBack: supportsPredictiveBack && themeProps.predictiveBack,
+          isMobile: isMobile,
+        );
+        return ValueListenableBuilder<bool>(
+          valueListenable: globalState.isBackground,
+          builder: (_, isBackground, _) {
+            return TickerMode(
+              enabled: !isBackground,
+              child: MaterialApp(
+                debugShowCheckedModeBanner: false,
+                navigatorKey: globalState.navigatorKey,
+                onNavigationNotification: (_) => true,
+                localizationsDelegates: const [
+                  AppLocalizations.delegate,
+                  GlobalMaterialLocalizations.delegate,
+                  GlobalCupertinoLocalizations.delegate,
+                  GlobalWidgetsLocalizations.delegate,
+                ],
+                builder: (_, child) {
+                  return AppEnvManager(
+                    child: _buildApp(
+                      child: _buildPlatformState(
+                        child: _buildState(
+                          child: _buildPlatformApp(child: child!),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+                scrollBehavior: BaseScrollBehavior(),
+                title: appName,
+                locale: utils.getLocaleForString(locale),
+                supportedLocales: AppLocalizations.delegate.supportedLocales,
+                themeMode: themeProps.themeMode,
+                theme: ThemeData(
+                  useMaterial3: true,
+                  pageTransitionsTheme: pageTransitionsTheme,
+                  colorScheme: _getAppColorScheme(
+                    brightness: Brightness.light,
+                    primaryColor: themeProps.primaryColor,
+                  ),
                 ),
+                darkTheme: ThemeData(
+                  useMaterial3: true,
+                  pageTransitionsTheme: pageTransitionsTheme,
+                  colorScheme: _getAppColorScheme(
+                    brightness: Brightness.dark,
+                    primaryColor: themeProps.primaryColor,
+                  ).toPureBlack(themeProps.pureBlack),
+                ),
+                home: child!,
               ),
             );
           },
-          scrollBehavior: BaseScrollBehavior(),
-          title: appName,
-          locale: utils.getLocaleForString(locale),
-          supportedLocales: AppLocalizations.delegate.supportedLocales,
-          themeMode: themeProps.themeMode,
-          theme: ThemeData(
-            useMaterial3: true,
-            pageTransitionsTheme: _pageTransitionsTheme,
-            colorScheme: _getAppColorScheme(
-              brightness: Brightness.light,
-              primaryColor: themeProps.primaryColor,
-            ),
-          ),
-          darkTheme: ThemeData(
-            useMaterial3: true,
-            pageTransitionsTheme: _pageTransitionsTheme,
-            colorScheme: _getAppColorScheme(
-              brightness: Brightness.dark,
-              primaryColor: themeProps.primaryColor,
-            ).toPureBlack(themeProps.pureBlack),
-          ),
-          home: child!,
         );
       },
       child: const HomePage(),

@@ -30,28 +30,28 @@ extension BuildContextExtension on BuildContext {
     }
   }
 
-  void showNotifier(String text, {MessageActionState? actionState}) {
+  void showNotifier(
+    String text, {
+    MessageActionState? actionState,
+    bool allowCopy = false,
+  }) {
     return findAncestorStateOfType<StatusManagerState>()?.message(
       text,
       actionState: actionState,
+      allowCopy: allowCopy,
     );
   }
 
-  void showSnackBar(String message, {SnackBarAction? action}) {
-    final width = viewWidth;
-    EdgeInsets margin;
-    if (width < 600) {
-      margin = const EdgeInsets.only(bottom: 16, right: 16, left: 16);
-    } else {
-      margin = EdgeInsets.only(bottom: 16, left: 16, right: width - 316);
-    }
-    ScaffoldMessenger.of(this).showSnackBar(
+  void showSnackBar(String message, {SnackBarAction? action, bool? persist}) {
+    final messager = ScaffoldMessenger.of(this);
+    messager.removeCurrentSnackBar();
+    messager.showSnackBar(
       SnackBar(
         action: action,
+        persist: persist,
         content: Text(message),
-        behavior: SnackBarBehavior.floating,
+        behavior: SnackBarBehavior.fixed,
         duration: const Duration(milliseconds: 1500),
-        margin: margin,
       ),
     );
   }
