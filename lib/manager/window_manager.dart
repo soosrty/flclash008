@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/enum/enum.dart';
+import 'package:fl_clash/models/state.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/state.dart';
 import 'package:flutter/material.dart';
@@ -28,16 +29,21 @@ class _WindowContainerState extends ConsumerState<WindowManager>
   @override
   void initState() {
     super.initState();
-    ref.listenManual(appSettingProvider.select((state) => state.autoLaunch), (
-      prev,
-      next,
-    ) {
-      if (prev != next) {
-        debouncer.call(FunctionTag.autoLaunch, () {
-          autoLaunch?.updateStatus(next);
-        });
-      }
-    });
+    ref.listenManual(
+      appSettingProvider.select(
+        (state) => VM2(state.autoLaunch, state.highPriorityAutoLaunch),
+      ),
+      (prev, next) {
+        if (prev != next) {
+          debouncer.call(FunctionTag.autoLaunch, () {
+            autoLaunch?.updateStatus(
+              isAutoLaunch: next.a,
+              isHighPriorityAutoLaunch: next.b,
+            );
+          });
+        }
+      },
+    );
     windowExtManager.addListener(this);
     windowManager.addListener(this);
   }
@@ -51,8 +57,14 @@ class _WindowContainerState extends ConsumerState<WindowManager>
   @override
   void onWindowFocus() {
     super.onWindowFocus();
-    commonPrint.log('focus');
-    render?.resume();
+    commonPrint.log('focus', logLevel: LogLevel.debug);
+    globalState.handleForeground();
+  }
+
+  @override
+  Future<void> onWindowActivated() async {
+    await window?.show();
+    await super.onWindowActivated();
   }
 
   @override
@@ -86,14 +98,14 @@ class _WindowContainerState extends ConsumerState<WindowManager>
   void onWindowMinimize() async {
     ref.read(storeActionProvider.notifier).savePreferencesDebounce();
     commonPrint.log('minimize');
-    render?.pause();
+    globalState.handleBackground();
     super.onWindowMinimize();
   }
 
   @override
   void onWindowRestore() {
     commonPrint.log('restore');
-    render?.resume();
+    globalState.handleForeground();
     super.onWindowRestore();
   }
 

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/models/config.dart';
+import 'package:fl_clash/state.dart';
 import 'package:flutter/material.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
@@ -17,13 +18,10 @@ class Window {
   }
 
   Future<void> init(int version, WindowProps props) async {
-    final acquire = await singleInstanceLock.acquire();
-    if (!acquire) {
-      exit(0);
-    }
     if (system.isWindows) {
       protocol.register('clash');
       protocol.register('clashmeta');
+      protocol.register('mihomo');
       protocol.register('flclash');
     }
     await windowManager.ensureInitialized();
@@ -45,34 +43,46 @@ class Window {
     if (!system.isMacOS) {
       final left = props.left ?? 0;
       final top = props.top ?? 0;
-      final right = left + props.width;
-      final bottom = top + props.height;
       if (left == 0 && top == 0) {
         await windowManager.setAlignment(Alignment.center);
+        return;
+      }
+      final displays = await screenRetriever.getAllDisplays();
+      final isPositionValid = displays.any((display) {
+        final scaleFactor = display.scaleFactor ?? 1.0;
+        // visibleSize is already in logical pixels; fall back to
+        // physical size / scaleFactor when visibleSize is unavailable.
+        final logicalWidth =
+            display.visibleSize?.width ?? display.size.width / scaleFactor;
+        final logicalHeight =
+            display.visibleSize?.height ?? display.size.height / scaleFactor;
+        final displayBounds = Rect.fromLTWH(
+          display.visiblePosition!.dx,
+          display.visiblePosition!.dy,
+          logicalWidth,
+          logicalHeight,
+        );
+        return displayBounds.contains(Offset(left, top));
+      });
+      if (isPositionValid) {
+        await windowManager.setPosition(Offset(left, top));
       } else {
-        final displays = await screenRetriever.getAllDisplays();
-        final isPositionValid = displays.any((display) {
-          final displayBounds = Rect.fromLTWH(
-            display.visiblePosition!.dx,
-            display.visiblePosition!.dy,
-            display.size.width,
-            display.size.height,
-          );
-          return displayBounds.contains(Offset(left, top)) ||
-              displayBounds.contains(Offset(right, bottom));
-        });
-        if (isPositionValid) {
-          await windowManager.setPosition(Offset(left, top));
-        }
+        await windowManager.setAlignment(Alignment.center);
       }
     }
   }
 
-  Future<void> show() async {
-    render?.resume();
-    await windowManager.show();
-    await windowManager.focus();
+  Future<void> show({
+    int? activationTimestamp,
+    String? activationToken,
+  }) async {
+    commonPrint.log('window show ts: $activationTimestamp, token: $activationToken');
+    globalState.handleForeground();
     await windowManager.setSkipTaskbar(false);
+    await windowManager.show(
+      activationTimestamp: activationTimestamp,
+      activationToken: activationToken,
+    );
   }
 
   Future<bool> get isVisible async {
@@ -90,7 +100,7 @@ class Window {
   }
 
   Future<void> hide() async {
-    render?.pause();
+    globalState.handleBackground();
     await windowManager.hide();
     await windowManager.setSkipTaskbar(true);
   }

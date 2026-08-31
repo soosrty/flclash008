@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:launch_at_startup/launch_at_startup.dart';
 
 import 'constant.dart';
@@ -26,6 +25,13 @@ class AutoLaunch {
     return launchAtStartup.isEnabled();
   }
 
+  Future<bool> get isHighPriorityEnable async {
+    if (!system.isWindows) {
+      return false;
+    }
+    return windows?.isTaskRegistered(appName) ?? false;
+  }
+
   Future<bool> enable() async {
     return launchAtStartup.enable();
   }
@@ -34,15 +40,44 @@ class AutoLaunch {
     return launchAtStartup.disable();
   }
 
-  Future<void> updateStatus(bool isAutoLaunch) async {
-    if (kDebugMode) {
-      return;
+  Future<bool> enableHighPriority() async {
+    if (!system.isWindows) {
+      return false;
     }
-    if (await isEnable == isAutoLaunch) return;
-    if (isAutoLaunch == true) {
-      enable();
-    } else {
-      disable();
+    return windows?.registerTask(appName) ?? false;
+  }
+
+  Future<bool> disableHighPriority() async {
+    if (!system.isWindows) {
+      return true;
+    }
+    return windows?.unregisterTask(appName) ?? true;
+  }
+
+  Future<void> updateStatus({
+    required bool isAutoLaunch,
+    bool isHighPriorityAutoLaunch = false,
+  }) async {
+    final shouldHighPriority =
+        system.isWindows && isAutoLaunch && isHighPriorityAutoLaunch;
+    final shouldNormal = isAutoLaunch && !shouldHighPriority;
+
+    if (system.isWindows) {
+      if (await isHighPriorityEnable != shouldHighPriority) {
+        if (shouldHighPriority) {
+          await enableHighPriority();
+        } else {
+          await disableHighPriority();
+        }
+      }
+    }
+
+    if (await isEnable != shouldNormal) {
+      if (shouldNormal) {
+        await enable();
+      } else {
+        await disable();
+      }
     }
   }
 }

@@ -11,6 +11,7 @@ import 'package:fl_clash/state.dart';
 import 'package:fl_clash/widgets/input.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart';
+import 'package:xml/xml.dart';
 
 class System {
   static System? _instance;
@@ -25,11 +26,15 @@ class System {
 
   bool get isDesktop => isWindows || isMacOS || isLinux;
 
+  bool get isMobile => isAndroid || isIOS;
+
   bool get isWindows => Platform.isWindows;
 
   bool get isMacOS => Platform.isMacOS;
 
   bool get isAndroid => Platform.isAndroid;
+
+  bool get isIOS => Platform.isIOS;
 
   bool get isLinux => Platform.isLinux;
 
@@ -50,17 +55,18 @@ class System {
       'macos' => (deviceInfo as MacOsDeviceInfo).majorVersion,
       'android' => (deviceInfo as AndroidDeviceInfo).version.sdkInt,
       'windows' => (deviceInfo as WindowsDeviceInfo).majorVersion,
+      'ios' => int.parse(
+        (deviceInfo as IosDeviceInfo).systemVersion.split('.').firstOrNull ??
+            '0',
+      ),
       String() => 0,
     };
   }
 
-  Future<bool> didCrashOnPreviousExecution() async {
-    if (!isAndroid) return false;
-    return await app?.didCrashOnPreviousExecution() ?? false;
-  }
+  bool supportsPredictiveBack(int version) => isAndroid && version >= 33;
 
   Future<bool> checkIsAdmin() async {
-    final corePath = appPath.corePath.replaceAll(' ', '\\\\ ');
+    final corePath = appPath.corePath;
     if (system.isWindows) {
       return await windowsHelperClient.readiness() ==
           WindowsHelperReadiness.ready;
@@ -87,7 +93,7 @@ class System {
   }
 
   Future<AuthorizeCode> authorizeCore() async {
-    if (system.isAndroid) {
+    if (system.isMobile) {
       return AuthorizeCode.error;
     }
     if (system.isWindows) {
@@ -110,8 +116,24 @@ class System {
         return AuthorizeCode.error;
       }
       return AuthorizeCode.success;
-    } else if (Platform.isLinux) {
-      final shell = Platform.environment['SHELL'] ?? 'bash';
+    }
+    if (Platform.isLinux) {
+      const shell = 'chown root:root -- "\$1" && chmod +sx -- "\$1"';
+      final arguments = ['/bin/sh', '-c', shell, 'sh', appPath.corePath];
+      try {
+        final result = await Process.run('pkexec', arguments);
+        switch (result.exitCode) {
+          case 0:
+            return AuthorizeCode.success;
+          case 127: // Unavailable
+            break;
+          default:
+            return AuthorizeCode.error;
+        }
+      } catch (_) {
+        // Fall back when polkit cannot complete the authorization request.
+      }
+
       final password = await globalState.showCommonDialog<String>(
         child: InputDialog(
           obscureText: true,
@@ -123,17 +145,27 @@ class System {
       if (password == null || password.isEmpty) {
         return AuthorizeCode.error;
       }
-      final escapedPassword = _shellEscape(password);
-      final escapedCorePath = _shellEscape(appPath.corePath);
-      final arguments = [
-        '-c',
-        'echo $escapedPassword | sudo -S chown root:root $escapedCorePath && echo $escapedPassword | sudo -S chmod +sx $escapedCorePath',
-      ];
-      final result = await Process.run(shell, arguments);
-      if (result.exitCode != 0) {
+
+      try {
+        final process = await Process.start('sudo', [
+          '-S',
+          '-p',
+          '',
+          '--',
+          ...arguments,
+        ]);
+        final outputDone = Future.wait([
+          process.stdout.drain<void>(),
+          process.stderr.drain<void>(),
+        ]);
+        process.stdin.writeln(password);
+        await process.stdin.close();
+        final exitCode = await process.exitCode;
+        await outputDone;
+        return exitCode == 0 ? AuthorizeCode.success : AuthorizeCode.error;
+      } catch (_) {
         return AuthorizeCode.error;
       }
-      return AuthorizeCode.success;
     }
     return AuthorizeCode.error;
   }
@@ -144,7 +176,7 @@ class System {
   }
 
   Future<void> exit() async {
-    if (system.isAndroid) {
+    if (system.isMobile) {
       await SystemNavigator.pop();
     }
     window?.forceExit();
@@ -277,22 +309,49 @@ class Windows {
     return false;
   }
 
+  Future<bool> isTaskRegistered(String appName) async {
+    final result = await Process.run('schtasks.exe', [
+      '/Query',
+      '/TN',
+      appName,
+    ]);
+    if (result.exitCode != 0) {
+      return false;
+    }
+    return result.stdout.toString().contains(appName);
+  }
+
+  Future<bool> unregisterTask(String appName) async {
+    if (!await isTaskRegistered(appName)) {
+      return true;
+    }
+    final result = await Process.run('schtasks.exe', [
+      '/Delete',
+      '/TN',
+      appName,
+      '/F',
+    ]);
+    return result.exitCode == 0;
+  }
+
   Future<bool> registerTask(String appName) async {
+    final executable = XmlText(Platform.resolvedExecutable).toXmlString();
     final taskXml =
         '''
 <?xml version="1.0" encoding="UTF-16"?>
-<Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <Principals>
     <Principal id="Author">
       <LogonType>InteractiveToken</LogonType>
-      <RunLevel>HighestAvailable</RunLevel>
     </Principal>
   </Principals>
   <Triggers>
-    <LogonTrigger/>
+    <LogonTrigger>
+      <Delay>PT0S</Delay>
+    </LogonTrigger>
   </Triggers>
   <Settings>
-    <MultipleInstancesPolicy>Parallel</MultipleInstancesPolicy>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
     <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
     <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
     <AllowHardTerminate>false</AllowHardTerminate>
@@ -307,12 +366,12 @@ class Windows {
     <Hidden>false</Hidden>
     <RunOnlyIfIdle>false</RunOnlyIfIdle>
     <WakeToRun>false</WakeToRun>
-    <ExecutionTimeLimit>PT72H</ExecutionTimeLimit>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
     <Priority>7</Priority>
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>"${Platform.resolvedExecutable}"</Command>
+      <Command>$executable</Command>
     </Exec>
   </Actions>
 </Task>''';
@@ -321,15 +380,12 @@ class Windows {
     await File(
       taskPath,
     ).writeAsBytes(taskXml.encodeUtf16LeWithBom, flush: true);
-    final commandLine = [
-      '/Create',
-      '/TN',
-      appName,
-      '/XML',
-      '%s',
-      '/F',
-    ].join(' ');
-    return runas('schtasks', commandLine.replaceFirst('%s', taskPath));
+    final commandLine = ['/Create', '/TN', appName, '/XML', taskPath, '/F'];
+    final result = await Process.run('schtasks.exe', commandLine);
+    if (result.exitCode == 0) {
+      return true;
+    }
+    return runas('schtasks.exe', commandLine.join(' '));
   }
 }
 
