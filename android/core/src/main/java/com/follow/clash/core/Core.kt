@@ -3,15 +3,32 @@ package com.follow.clash.core
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.URI
+import org.json.JSONObject
 
 object Core {
     private external fun startTun(
         fd: Int,
         cb: TunInterface,
-        stack: String,
-        address: String,
-        dns: String,
+        options: String,
     )
+
+    data class TunOptions(
+        val stack: String,
+        val address: String,
+        val dns: String,
+        val mtu: Int,
+        val disableIcmpForwarding: Boolean,
+        val endpointIndependentNat: Boolean,
+    ) {
+        fun toJson(): String = JSONObject()
+            .put("stack", stack)
+            .put("address", address)
+            .put("dns", dns)
+            .put("mtu", mtu)
+            .put("disableIcmpForwarding", disableIcmpForwarding)
+            .put("endpointIndependentNat", endpointIndependentNat)
+            .toString()
+    }
 
     external fun forceGC()
 
@@ -30,9 +47,7 @@ object Core {
         fd: Int,
         protect: (Int) -> Boolean,
         resolverProcess: (protocol: Int, source: InetSocketAddress, target: InetSocketAddress, uid: Int) -> String,
-        stack: String,
-        address: String,
-        dns: String,
+        options: TunOptions,
     ) {
         startTun(
             fd,
@@ -55,9 +70,7 @@ object Core {
                     )
                 }
             },
-            stack,
-            address,
-            dns,
+            options.toJson(),
         )
     }
 

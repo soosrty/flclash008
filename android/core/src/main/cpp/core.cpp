@@ -2,6 +2,8 @@
 
 #ifdef LIBCLASH
 
+#include <cstring>
+
 #include "jni_helper.h"
 #include "libclash.h"
 #include "bride.h"
@@ -9,9 +11,9 @@
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_follow_clash_core_Core_startTun(JNIEnv *env, jobject thiz, jint fd, jobject cb,
-                                         jstring stack, jstring address, jstring dns) {
+                                         jstring options) {
     const auto interface = new_global(cb);
-    startTUN(interface, fd, get_string(stack), get_string(address), get_string(dns));
+    startTUN(interface, fd, get_string(options));
 }
 
 extern "C"
@@ -91,6 +93,11 @@ static void release_jni_object_impl(void *obj) {
     del_global(static_cast<jobject>(obj));
 }
 
+static void *retain_jni_object_impl(void *obj) {
+    ATTACH_JNI();
+    return new_global(static_cast<jobject>(obj));
+}
+
 static void free_string_impl(char *str) {
     free(str);
 }
@@ -107,6 +114,9 @@ call_tun_interface_resolve_process_impl(void *tun_interface, const int protocol,
                                         const char *source,
                                         const char *target,
                                         const int uid) {
+    if (tun_interface == nullptr) {
+        return strdup("");
+    }
     ATTACH_JNI();
     const auto source_string = new_string(source);
     const auto target_string = new_string(target);
@@ -160,6 +170,7 @@ JNI_OnLoad(JavaVM *vm, void *) {
     resolve_process_func = &call_tun_interface_resolve_process_impl;
     result_func = &call_invoke_interface_result_impl;
     release_object_func = &release_jni_object_impl;
+    retain_object_func = &retain_jni_object_impl;
     free_string_func = &free_string_impl;
 
     return JNI_VERSION_1_6;
@@ -168,7 +179,7 @@ JNI_OnLoad(JavaVM *vm, void *) {
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_follow_clash_core_Core_startTun(JNIEnv *env, jobject thiz, jint fd, jobject cb,
-                                         jstring stack, jstring address, jstring dns) {
+                                         jstring options) {
 }
 
 extern "C"

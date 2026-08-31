@@ -117,7 +117,9 @@ object ServiceState {
             plugin.handleStop()
             return
         }
-        GlobalState.application.showToast(sharedState.stopTip)
+        GlobalState.application.showToast(
+            GlobalState.application.getString(R.string.stop_vpn),
+        )
         requestStop().await()
     }
 
@@ -191,19 +193,20 @@ object ServiceState {
     }
 
     private fun applySharedState() {
-        GlobalState.setCrashlytics(sharedState.crashlytics)
         ServiceConfig.updateNotificationParams(
             NotificationParams(
                 title = sharedState.currentProfileName,
-                stopText = sharedState.stopText,
                 onlyStatisticsProxy = sharedState.onlyStatisticsProxy,
+                networkSpeedNotification = sharedState.networkSpeedNotification,
             ),
         )
     }
 
     private suspend fun setupCore(): Boolean {
         applySharedState()
-        GlobalState.application.showToast(sharedState.startTip)
+        GlobalState.application.showToast(
+            GlobalState.application.getString(R.string.start_vpn),
+        )
         val initParams = Gson().toJson(
             mapOf(
                 "home-dir" to GlobalState.application.filesDir.path,
