@@ -58,6 +58,7 @@ abstract class CommonMessage with _$CommonMessage {
     required String text,
     @Default(Duration(seconds: 3)) Duration duration,
     MessageActionState? actionState,
+    @Default(false) bool allowCopy,
   }) = _CommonMessage;
 }
 
@@ -82,7 +83,9 @@ abstract class AppBarState with _$AppBarState {
 abstract class AppBarSearchState with _$AppBarSearchState {
   const factory AppBarSearchState({
     required Function(String) onSearch,
+    Function(bool)? onRegexChange,
     @Default(true) bool autoAddSearch,
+    @Default(false) bool useRegex,
     @Default(null) String? query,
   }) = _AppBarSearchState;
 }
@@ -116,6 +119,7 @@ abstract class NetworkDetectionState with _$NetworkDetectionState {
   const factory NetworkDetectionState({
     required bool isLoading,
     required IpInfo? ipInfo,
+    @Default(true) bool isIpVisible,
   }) = _NetworkDetectionState;
 }
 
@@ -132,16 +136,9 @@ abstract class TrayState with _$TrayState {
     required Brightness? brightness,
     required List<Group> groups,
     required Map<String, String> selectedMap,
-    required bool showTrayTitle,
+    required bool showNetworkSpeed,
+    required bool monochromeTrayIcon,
   }) = _TrayState;
-}
-
-@freezed
-abstract class TrayTitleState with _$TrayTitleState {
-  const factory TrayTitleState({
-    required Traffic traffic,
-    required bool showTrayTitle,
-  }) = _TrayTitleState;
 }
 
 @freezed
@@ -266,7 +263,7 @@ abstract class ProxyState with _$ProxyState {
   const factory ProxyState({
     required bool isStart,
     required bool systemProxy,
-    required List<String> bassDomain,
+    required List<String> bypassDomain,
     required int port,
   }) = _ProxyState;
 }
@@ -288,24 +285,15 @@ abstract class SelectedProxyState with _$SelectedProxyState {
 }
 
 @freezed
-abstract class VpnState with _$VpnState {
-  const factory VpnState({
-    required TunStack stack,
-    required VpnProps vpnProps,
-  }) = _VpnState;
-}
-
-@freezed
 abstract class SharedState with _$SharedState {
   const factory SharedState({
     SetupParams? setupParams,
     VpnOptions? vpnOptions,
-    required String stopTip,
-    required String startTip,
     required String currentProfileName,
-    required String stopText,
     required bool onlyStatisticsProxy,
-    required bool crashlytics,
+    required bool networkSpeedNotification,
+    @Default(false) bool alwaysOn,
+    @Default([]) List<String> excludeSSIDs,
   }) = _SharedState;
 
   factory SharedState.fromJson(Map<String, Object?> json) =>

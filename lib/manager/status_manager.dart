@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:collection';
 import 'dart:math';
 
 import 'package:fl_clash/common/common.dart';
@@ -8,6 +7,7 @@ import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/widgets/fade_box.dart';
 import 'package:fl_clash/widgets/theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class StatusManager extends StatefulWidget {
@@ -21,9 +21,7 @@ class StatusManager extends StatefulWidget {
 
 class StatusManagerState extends State<StatusManager> {
   final _messagesNotifier = ValueNotifier<List<CommonMessage>>([]);
-  final _bufferMessages = Queue<CommonMessage>();
   final _activeTimers = <String, Timer>{};
-  bool _isDisplayingMessage = false;
 
   @override
   void initState() {
@@ -37,35 +35,30 @@ class StatusManagerState extends State<StatusManager> {
       timer.cancel();
     }
     _activeTimers.clear();
-    _bufferMessages.clear();
     super.dispose();
   }
 
-  void message(String text, {MessageActionState? actionState}) {
+  void message(
+    String text, {
+    MessageActionState? actionState,
+    bool allowCopy = true,
+  }) {
     final commonMessage = CommonMessage(
       id: utils.uuidV4,
       text: text,
       actionState: actionState,
+      allowCopy: allowCopy,
     );
-    _bufferMessages.add(commonMessage);
     commonPrint.log('message: $text');
-    _processQueue();
+    _showMessage(commonMessage);
   }
 
-  void _cancelMessage(String id) {
-    _bufferMessages.removeWhere((msg) => msg.id == id);
-    if (_activeTimers.containsKey(id)) {
-      _removeMessage(id);
+  void _showMessage(CommonMessage message) {
+    for (final timer in _activeTimers.values) {
+      timer.cancel();
     }
-  }
-
-  void _processQueue() {
-    if (_isDisplayingMessage || _bufferMessages.isEmpty) {
-      return;
-    }
-    _isDisplayingMessage = true;
-    final message = _bufferMessages.removeFirst();
-    _messagesNotifier.value = List.from(_messagesNotifier.value)..add(message);
+    _activeTimers.clear();
+    _messagesNotifier.value = [message];
     final timer = Timer(message.duration, () {
       _removeMessage(message.id);
     });
@@ -77,8 +70,6 @@ class StatusManagerState extends State<StatusManager> {
     final currentMessages = List<CommonMessage>.from(_messagesNotifier.value);
     currentMessages.removeWhere((msg) => msg.id == id);
     _messagesNotifier.value = currentMessages;
-    _isDisplayingMessage = false;
-    _processQueue();
   }
 
   @override
@@ -115,12 +106,20 @@ class StatusManagerState extends State<StatusManager> {
                             : LayoutBuilder(
                                 key: Key(messages.last.id),
                                 builder: (_, constraints) {
+                                  final message = messages.last;
+                                  final actionState = message.actionState;
+                                  final cardWidth = min(
+                                    constraints.maxWidth,
+                                    500.0,
+                                  );
+                                  final showCloseButton = cardWidth >= 480;
                                   return Dismissible(
-                                    key: ValueKey(messages.last.id),
+                                    key: ValueKey(message.id),
                                     onDismissed: (_) {
-                                      _cancelMessage(messages.last.id);
+                                      _removeMessage(message.id);
                                     },
                                     child: Card(
+                                      clipBehavior: Clip.antiAlias,
                                       shape: const RoundedSuperellipseBorder(
                                         borderRadius: BorderRadius.all(
                                           Radius.circular(14),
@@ -130,55 +129,105 @@ class StatusManagerState extends State<StatusManager> {
                                       color: context
                                           .colorScheme
                                           .surfaceContainerHigh,
-                                      child: Container(
-                                        width: min(constraints.maxWidth, 500),
-                                        constraints: const BoxConstraints(
-                                          minHeight: 54,
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 8,
-                                        ),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Flexible(
-                                              child: Text(
-                                                messages.last.text,
-                                                maxLines: 3,
-                                                style: context
-                                                    .textTheme
-                                                    .labelLarge
-                                                    ?.copyWith(
-                                                      color: context
-                                                          .colorScheme
-                                                          .onSurfaceVariant,
-                                                    ),
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 16),
-                                            if (messages.last.actionState !=
-                                                null)
-                                              CommonMinFilledButtonTheme(
-                                                child: FilledButton.tonal(
-                                                  onPressed: () async {
-                                                    _cancelMessage(
-                                                      messages.last.id,
-                                                    );
-                                                    messages.last.actionState!
-                                                        .action();
-                                                  },
+                                      child: InkWell(
+                                        onLongPress: () {
+                                          Clipboard.setData(
+                                            ClipboardData(text: message.text),
+                                          );
+                                        },
+                                        child: Container(
+                                          width: cardWidth,
+                                          constraints: const BoxConstraints(
+                                            minHeight: 54,
+                                          ),
+                                          padding: const EdgeInsets.all(8),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                child: Padding(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                      ),
                                                   child: Text(
-                                                    messages
-                                                        .last
-                                                        .actionState!
-                                                        .actionText,
+                                                    message.text,
+                                                    maxLines: 3,
+                                                    style: context
+                                                        .textTheme
+                                                        .labelLarge
+                                                        ?.copyWith(
+                                                          color: context
+                                                              .colorScheme
+                                                              .onSurfaceVariant,
+                                                        ),
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
                                                   ),
                                                 ),
                                               ),
-                                          ],
+                                              if (actionState != null) ...[
+                                                CommonMinFilledButtonTheme(
+                                                  child: FilledButton.tonal(
+                                                    onPressed: () async {
+                                                      _removeMessage(
+                                                        message.id,
+                                                      );
+                                                      actionState.action();
+                                                    },
+                                                    child: Text(
+                                                      actionState.actionText,
+                                                    ),
+                                                  ),
+                                                ),
+                                                if (showCloseButton)
+                                                  const SizedBox(width: 4),
+                                              ] else if (showCloseButton &&
+                                                  message.allowCopy) ...[
+                                                IconButton(
+                                                  style: IconButton.styleFrom(
+                                                    fixedSize:
+                                                        const Size.square(32),
+                                                    padding: EdgeInsets.zero,
+                                                    shape: const CircleBorder(),
+                                                    tapTargetSize:
+                                                        MaterialTapTargetSize
+                                                            .shrinkWrap,
+                                                  ),
+                                                  visualDensity:
+                                                      VisualDensity.compact,
+                                                  iconSize: 20,
+                                                  onPressed: () {
+                                                    Clipboard.setData(
+                                                      ClipboardData(
+                                                        text: message.text,
+                                                      ),
+                                                    );
+                                                  },
+                                                  icon: const Icon(Icons.copy),
+                                                ),
+                                                const SizedBox(width: 4),
+                                              ],
+                                              if (showCloseButton)
+                                                IconButton(
+                                                  style: IconButton.styleFrom(
+                                                    fixedSize:
+                                                        const Size.square(32),
+                                                    padding: EdgeInsets.zero,
+                                                    shape: const CircleBorder(),
+                                                    tapTargetSize:
+                                                        MaterialTapTargetSize
+                                                            .shrinkWrap,
+                                                  ),
+                                                  visualDensity:
+                                                      VisualDensity.compact,
+                                                  iconSize: 20,
+                                                  onPressed: () {
+                                                    _removeMessage(message.id);
+                                                  },
+                                                  icon: const Icon(Icons.close),
+                                                ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),

@@ -5,6 +5,7 @@ import 'package:fl_clash/models/models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'constant.dart';
+import 'portable_pref.dart';
 
 class Preferences {
   static Preferences? _instance;
@@ -14,6 +15,7 @@ class Preferences {
       await sharedPreferencesCompleter.future != null;
 
   Preferences._internal() {
+    configurePortablePreferences();
     SharedPreferences.getInstance()
         .then((value) => sharedPreferencesCompleter.complete(value))
         .onError((_, _) => sharedPreferencesCompleter.complete(null));

@@ -571,7 +571,7 @@ as int,
 /// @nodoc
 mixin _$Metadata {
 
- int get uid; String get network; String get sourceIP; String get sourcePort; String get destinationIP; String get destinationPort; String get host; DnsMode? get dnsMode; String get process; String get processPath; String get remoteDestination; List<String> get sourceGeoIP; List<String> get destinationGeoIP; String get destinationIPASN; String get sourceIPASN; String get specialRules; String get specialProxy;
+ int get uid; String get network; String get sourceIP; String get sourcePort; String get destinationIP; String get destinationPort; String get host;@JsonKey(unknownEnumValue: JsonKey.nullForUndefinedEnumValue) DnsMode? get dnsMode; String get process; String get processPath; String get remoteDestination; List<String> get sourceGeoIP; List<String> get destinationGeoIP; String get destinationIPASN; String get sourceIPASN; String get specialRules; String get specialProxy;
 /// Create a copy of Metadata
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -604,7 +604,7 @@ abstract mixin class $MetadataCopyWith<$Res>  {
   factory $MetadataCopyWith(Metadata value, $Res Function(Metadata) _then) = _$MetadataCopyWithImpl;
 @useResult
 $Res call({
- int uid, String network, String sourceIP, String sourcePort, String destinationIP, String destinationPort, String host, DnsMode? dnsMode, String process, String processPath, String remoteDestination, List<String> sourceGeoIP, List<String> destinationGeoIP, String destinationIPASN, String sourceIPASN, String specialRules, String specialProxy
+ int uid, String network, String sourceIP, String sourcePort, String destinationIP, String destinationPort, String host,@JsonKey(unknownEnumValue: JsonKey.nullForUndefinedEnumValue) DnsMode? dnsMode, String process, String processPath, String remoteDestination, List<String> sourceGeoIP, List<String> destinationGeoIP, String destinationIPASN, String sourceIPASN, String specialRules, String specialProxy
 });
 
 
@@ -725,7 +725,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int uid,  String network,  String sourceIP,  String sourcePort,  String destinationIP,  String destinationPort,  String host,  DnsMode? dnsMode,  String process,  String processPath,  String remoteDestination,  List<String> sourceGeoIP,  List<String> destinationGeoIP,  String destinationIPASN,  String sourceIPASN,  String specialRules,  String specialProxy)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int uid,  String network,  String sourceIP,  String sourcePort,  String destinationIP,  String destinationPort,  String host, @JsonKey(unknownEnumValue: JsonKey.nullForUndefinedEnumValue)  DnsMode? dnsMode,  String process,  String processPath,  String remoteDestination,  List<String> sourceGeoIP,  List<String> destinationGeoIP,  String destinationIPASN,  String sourceIPASN,  String specialRules,  String specialProxy)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Metadata() when $default != null:
 return $default(_that.uid,_that.network,_that.sourceIP,_that.sourcePort,_that.destinationIP,_that.destinationPort,_that.host,_that.dnsMode,_that.process,_that.processPath,_that.remoteDestination,_that.sourceGeoIP,_that.destinationGeoIP,_that.destinationIPASN,_that.sourceIPASN,_that.specialRules,_that.specialProxy);case _:
@@ -746,7 +746,7 @@ return $default(_that.uid,_that.network,_that.sourceIP,_that.sourcePort,_that.de
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int uid,  String network,  String sourceIP,  String sourcePort,  String destinationIP,  String destinationPort,  String host,  DnsMode? dnsMode,  String process,  String processPath,  String remoteDestination,  List<String> sourceGeoIP,  List<String> destinationGeoIP,  String destinationIPASN,  String sourceIPASN,  String specialRules,  String specialProxy)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int uid,  String network,  String sourceIP,  String sourcePort,  String destinationIP,  String destinationPort,  String host, @JsonKey(unknownEnumValue: JsonKey.nullForUndefinedEnumValue)  DnsMode? dnsMode,  String process,  String processPath,  String remoteDestination,  List<String> sourceGeoIP,  List<String> destinationGeoIP,  String destinationIPASN,  String sourceIPASN,  String specialRules,  String specialProxy)  $default,) {final _that = this;
 switch (_that) {
 case _Metadata():
 return $default(_that.uid,_that.network,_that.sourceIP,_that.sourcePort,_that.destinationIP,_that.destinationPort,_that.host,_that.dnsMode,_that.process,_that.processPath,_that.remoteDestination,_that.sourceGeoIP,_that.destinationGeoIP,_that.destinationIPASN,_that.sourceIPASN,_that.specialRules,_that.specialProxy);case _:
@@ -766,7 +766,7 @@ return $default(_that.uid,_that.network,_that.sourceIP,_that.sourcePort,_that.de
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int uid,  String network,  String sourceIP,  String sourcePort,  String destinationIP,  String destinationPort,  String host,  DnsMode? dnsMode,  String process,  String processPath,  String remoteDestination,  List<String> sourceGeoIP,  List<String> destinationGeoIP,  String destinationIPASN,  String sourceIPASN,  String specialRules,  String specialProxy)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int uid,  String network,  String sourceIP,  String sourcePort,  String destinationIP,  String destinationPort,  String host, @JsonKey(unknownEnumValue: JsonKey.nullForUndefinedEnumValue)  DnsMode? dnsMode,  String process,  String processPath,  String remoteDestination,  List<String> sourceGeoIP,  List<String> destinationGeoIP,  String destinationIPASN,  String sourceIPASN,  String specialRules,  String specialProxy)?  $default,) {final _that = this;
 switch (_that) {
 case _Metadata() when $default != null:
 return $default(_that.uid,_that.network,_that.sourceIP,_that.sourcePort,_that.destinationIP,_that.destinationPort,_that.host,_that.dnsMode,_that.process,_that.processPath,_that.remoteDestination,_that.sourceGeoIP,_that.destinationGeoIP,_that.destinationIPASN,_that.sourceIPASN,_that.specialRules,_that.specialProxy);case _:
@@ -781,7 +781,7 @@ return $default(_that.uid,_that.network,_that.sourceIP,_that.sourcePort,_that.de
 @JsonSerializable()
 
 class _Metadata implements Metadata {
-  const _Metadata({this.uid = 0, this.network = '', this.sourceIP = '', this.sourcePort = '', this.destinationIP = '', this.destinationPort = '', this.host = '', this.dnsMode, this.process = '', this.processPath = '', this.remoteDestination = '', final  List<String> sourceGeoIP = const [], final  List<String> destinationGeoIP = const [], this.destinationIPASN = '', this.sourceIPASN = '', this.specialRules = '', this.specialProxy = ''}): _sourceGeoIP = sourceGeoIP,_destinationGeoIP = destinationGeoIP;
+  const _Metadata({this.uid = 0, this.network = '', this.sourceIP = '', this.sourcePort = '', this.destinationIP = '', this.destinationPort = '', this.host = '', @JsonKey(unknownEnumValue: JsonKey.nullForUndefinedEnumValue) this.dnsMode, this.process = '', this.processPath = '', this.remoteDestination = '', final  List<String> sourceGeoIP = const [], final  List<String> destinationGeoIP = const [], this.destinationIPASN = '', this.sourceIPASN = '', this.specialRules = '', this.specialProxy = ''}): _sourceGeoIP = sourceGeoIP,_destinationGeoIP = destinationGeoIP;
   factory _Metadata.fromJson(Map<String, dynamic> json) => _$MetadataFromJson(json);
 
 @override@JsonKey() final  int uid;
@@ -791,7 +791,7 @@ class _Metadata implements Metadata {
 @override@JsonKey() final  String destinationIP;
 @override@JsonKey() final  String destinationPort;
 @override@JsonKey() final  String host;
-@override final  DnsMode? dnsMode;
+@override@JsonKey(unknownEnumValue: JsonKey.nullForUndefinedEnumValue) final  DnsMode? dnsMode;
 @override@JsonKey() final  String process;
 @override@JsonKey() final  String processPath;
 @override@JsonKey() final  String remoteDestination;
@@ -847,7 +847,7 @@ abstract mixin class _$MetadataCopyWith<$Res> implements $MetadataCopyWith<$Res>
   factory _$MetadataCopyWith(_Metadata value, $Res Function(_Metadata) _then) = __$MetadataCopyWithImpl;
 @override @useResult
 $Res call({
- int uid, String network, String sourceIP, String sourcePort, String destinationIP, String destinationPort, String host, DnsMode? dnsMode, String process, String processPath, String remoteDestination, List<String> sourceGeoIP, List<String> destinationGeoIP, String destinationIPASN, String sourceIPASN, String specialRules, String specialProxy
+ int uid, String network, String sourceIP, String sourcePort, String destinationIP, String destinationPort, String host,@JsonKey(unknownEnumValue: JsonKey.nullForUndefinedEnumValue) DnsMode? dnsMode, String process, String processPath, String remoteDestination, List<String> sourceGeoIP, List<String> destinationGeoIP, String destinationIPASN, String sourceIPASN, String specialRules, String specialProxy
 });
 
 
@@ -1208,7 +1208,7 @@ $MetadataCopyWith<$Res> get metadata {
 /// @nodoc
 mixin _$Log {
 
-@JsonKey(name: 'LogLevel') LogLevel get logLevel;@JsonKey(name: 'Payload') String get payload;@JsonKey(fromJson: _logDateTime) String get dateTime;
+@JsonKey(name: 'LogLevel', unknownEnumValue: LogLevel.info) LogLevel get logLevel;@JsonKey(unknownEnumValue: LogSource.app) LogSource get source;@JsonKey(name: 'Payload') String get payload;@JsonKey(name: 'Time', fromJson: _logTimestamp) int get timestamp;
 /// Create a copy of Log
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -1221,16 +1221,16 @@ $LogCopyWith<Log> get copyWith => _$LogCopyWithImpl<Log>(this as Log, _$identity
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Log&&(identical(other.logLevel, logLevel) || other.logLevel == logLevel)&&(identical(other.payload, payload) || other.payload == payload)&&(identical(other.dateTime, dateTime) || other.dateTime == dateTime));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Log&&(identical(other.logLevel, logLevel) || other.logLevel == logLevel)&&(identical(other.source, source) || other.source == source)&&(identical(other.payload, payload) || other.payload == payload)&&(identical(other.timestamp, timestamp) || other.timestamp == timestamp));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,logLevel,payload,dateTime);
+int get hashCode => Object.hash(runtimeType,logLevel,source,payload,timestamp);
 
 @override
 String toString() {
-  return 'Log(logLevel: $logLevel, payload: $payload, dateTime: $dateTime)';
+  return 'Log(logLevel: $logLevel, source: $source, payload: $payload, timestamp: $timestamp)';
 }
 
 
@@ -1241,7 +1241,7 @@ abstract mixin class $LogCopyWith<$Res>  {
   factory $LogCopyWith(Log value, $Res Function(Log) _then) = _$LogCopyWithImpl;
 @useResult
 $Res call({
-@JsonKey(name: 'LogLevel') LogLevel logLevel,@JsonKey(name: 'Payload') String payload,@JsonKey(fromJson: _logDateTime) String dateTime
+@JsonKey(name: 'LogLevel', unknownEnumValue: LogLevel.info) LogLevel logLevel,@JsonKey(unknownEnumValue: LogSource.app) LogSource source,@JsonKey(name: 'Payload') String payload,@JsonKey(name: 'Time', fromJson: _logTimestamp) int timestamp
 });
 
 
@@ -1258,12 +1258,13 @@ class _$LogCopyWithImpl<$Res>
 
 /// Create a copy of Log
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? logLevel = null,Object? payload = null,Object? dateTime = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? logLevel = null,Object? source = null,Object? payload = null,Object? timestamp = null,}) {
   return _then(_self.copyWith(
 logLevel: null == logLevel ? _self.logLevel : logLevel // ignore: cast_nullable_to_non_nullable
-as LogLevel,payload: null == payload ? _self.payload : payload // ignore: cast_nullable_to_non_nullable
-as String,dateTime: null == dateTime ? _self.dateTime : dateTime // ignore: cast_nullable_to_non_nullable
-as String,
+as LogLevel,source: null == source ? _self.source : source // ignore: cast_nullable_to_non_nullable
+as LogSource,payload: null == payload ? _self.payload : payload // ignore: cast_nullable_to_non_nullable
+as String,timestamp: null == timestamp ? _self.timestamp : timestamp // ignore: cast_nullable_to_non_nullable
+as int,
   ));
 }
 
@@ -1348,10 +1349,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'LogLevel')  LogLevel logLevel, @JsonKey(name: 'Payload')  String payload, @JsonKey(fromJson: _logDateTime)  String dateTime)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'LogLevel', unknownEnumValue: LogLevel.info)  LogLevel logLevel, @JsonKey(unknownEnumValue: LogSource.app)  LogSource source, @JsonKey(name: 'Payload')  String payload, @JsonKey(name: 'Time', fromJson: _logTimestamp)  int timestamp)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Log() when $default != null:
-return $default(_that.logLevel,_that.payload,_that.dateTime);case _:
+return $default(_that.logLevel,_that.source,_that.payload,_that.timestamp);case _:
   return orElse();
 
 }
@@ -1369,10 +1370,10 @@ return $default(_that.logLevel,_that.payload,_that.dateTime);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'LogLevel')  LogLevel logLevel, @JsonKey(name: 'Payload')  String payload, @JsonKey(fromJson: _logDateTime)  String dateTime)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'LogLevel', unknownEnumValue: LogLevel.info)  LogLevel logLevel, @JsonKey(unknownEnumValue: LogSource.app)  LogSource source, @JsonKey(name: 'Payload')  String payload, @JsonKey(name: 'Time', fromJson: _logTimestamp)  int timestamp)  $default,) {final _that = this;
 switch (_that) {
 case _Log():
-return $default(_that.logLevel,_that.payload,_that.dateTime);case _:
+return $default(_that.logLevel,_that.source,_that.payload,_that.timestamp);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -1389,10 +1390,10 @@ return $default(_that.logLevel,_that.payload,_that.dateTime);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'LogLevel')  LogLevel logLevel, @JsonKey(name: 'Payload')  String payload, @JsonKey(fromJson: _logDateTime)  String dateTime)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'LogLevel', unknownEnumValue: LogLevel.info)  LogLevel logLevel, @JsonKey(unknownEnumValue: LogSource.app)  LogSource source, @JsonKey(name: 'Payload')  String payload, @JsonKey(name: 'Time', fromJson: _logTimestamp)  int timestamp)?  $default,) {final _that = this;
 switch (_that) {
 case _Log() when $default != null:
-return $default(_that.logLevel,_that.payload,_that.dateTime);case _:
+return $default(_that.logLevel,_that.source,_that.payload,_that.timestamp);case _:
   return null;
 
 }
@@ -1404,12 +1405,13 @@ return $default(_that.logLevel,_that.payload,_that.dateTime);case _:
 @JsonSerializable()
 
 class _Log implements Log {
-  const _Log({@JsonKey(name: 'LogLevel') this.logLevel = LogLevel.info, @JsonKey(name: 'Payload') this.payload = '', @JsonKey(fromJson: _logDateTime) required this.dateTime});
+  const _Log({@JsonKey(name: 'LogLevel', unknownEnumValue: LogLevel.info) this.logLevel = LogLevel.info, @JsonKey(unknownEnumValue: LogSource.app) this.source = LogSource.app, @JsonKey(name: 'Payload') this.payload = '', @JsonKey(name: 'Time', fromJson: _logTimestamp) required this.timestamp});
   factory _Log.fromJson(Map<String, dynamic> json) => _$LogFromJson(json);
 
-@override@JsonKey(name: 'LogLevel') final  LogLevel logLevel;
+@override@JsonKey(name: 'LogLevel', unknownEnumValue: LogLevel.info) final  LogLevel logLevel;
+@override@JsonKey(unknownEnumValue: LogSource.app) final  LogSource source;
 @override@JsonKey(name: 'Payload') final  String payload;
-@override@JsonKey(fromJson: _logDateTime) final  String dateTime;
+@override@JsonKey(name: 'Time', fromJson: _logTimestamp) final  int timestamp;
 
 /// Create a copy of Log
 /// with the given fields replaced by the non-null parameter values.
@@ -1424,16 +1426,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Log&&(identical(other.logLevel, logLevel) || other.logLevel == logLevel)&&(identical(other.payload, payload) || other.payload == payload)&&(identical(other.dateTime, dateTime) || other.dateTime == dateTime));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Log&&(identical(other.logLevel, logLevel) || other.logLevel == logLevel)&&(identical(other.source, source) || other.source == source)&&(identical(other.payload, payload) || other.payload == payload)&&(identical(other.timestamp, timestamp) || other.timestamp == timestamp));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,logLevel,payload,dateTime);
+int get hashCode => Object.hash(runtimeType,logLevel,source,payload,timestamp);
 
 @override
 String toString() {
-  return 'Log(logLevel: $logLevel, payload: $payload, dateTime: $dateTime)';
+  return 'Log(logLevel: $logLevel, source: $source, payload: $payload, timestamp: $timestamp)';
 }
 
 
@@ -1444,7 +1446,7 @@ abstract mixin class _$LogCopyWith<$Res> implements $LogCopyWith<$Res> {
   factory _$LogCopyWith(_Log value, $Res Function(_Log) _then) = __$LogCopyWithImpl;
 @override @useResult
 $Res call({
-@JsonKey(name: 'LogLevel') LogLevel logLevel,@JsonKey(name: 'Payload') String payload,@JsonKey(fromJson: _logDateTime) String dateTime
+@JsonKey(name: 'LogLevel', unknownEnumValue: LogLevel.info) LogLevel logLevel,@JsonKey(unknownEnumValue: LogSource.app) LogSource source,@JsonKey(name: 'Payload') String payload,@JsonKey(name: 'Time', fromJson: _logTimestamp) int timestamp
 });
 
 
@@ -1461,12 +1463,13 @@ class __$LogCopyWithImpl<$Res>
 
 /// Create a copy of Log
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? logLevel = null,Object? payload = null,Object? dateTime = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? logLevel = null,Object? source = null,Object? payload = null,Object? timestamp = null,}) {
   return _then(_Log(
 logLevel: null == logLevel ? _self.logLevel : logLevel // ignore: cast_nullable_to_non_nullable
-as LogLevel,payload: null == payload ? _self.payload : payload // ignore: cast_nullable_to_non_nullable
-as String,dateTime: null == dateTime ? _self.dateTime : dateTime // ignore: cast_nullable_to_non_nullable
-as String,
+as LogLevel,source: null == source ? _self.source : source // ignore: cast_nullable_to_non_nullable
+as LogSource,payload: null == payload ? _self.payload : payload // ignore: cast_nullable_to_non_nullable
+as String,timestamp: null == timestamp ? _self.timestamp : timestamp // ignore: cast_nullable_to_non_nullable
+as int,
   ));
 }
 
@@ -1476,7 +1479,7 @@ as String,
 /// @nodoc
 mixin _$LogsState {
 
- List<Log> get logs; List<String> get keywords; String get query; bool get autoScrollToEnd;
+ List<Log> get logs; Set<LogSource> get sources; Set<LogLevel> get levels; String get query; bool get useRegex; bool get autoScrollToEnd;
 /// Create a copy of LogsState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -1487,16 +1490,16 @@ $LogsStateCopyWith<LogsState> get copyWith => _$LogsStateCopyWithImpl<LogsState>
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is LogsState&&const DeepCollectionEquality().equals(other.logs, logs)&&const DeepCollectionEquality().equals(other.keywords, keywords)&&(identical(other.query, query) || other.query == query)&&(identical(other.autoScrollToEnd, autoScrollToEnd) || other.autoScrollToEnd == autoScrollToEnd));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is LogsState&&const DeepCollectionEquality().equals(other.logs, logs)&&const DeepCollectionEquality().equals(other.sources, sources)&&const DeepCollectionEquality().equals(other.levels, levels)&&(identical(other.query, query) || other.query == query)&&(identical(other.useRegex, useRegex) || other.useRegex == useRegex)&&(identical(other.autoScrollToEnd, autoScrollToEnd) || other.autoScrollToEnd == autoScrollToEnd));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(logs),const DeepCollectionEquality().hash(keywords),query,autoScrollToEnd);
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(logs),const DeepCollectionEquality().hash(sources),const DeepCollectionEquality().hash(levels),query,useRegex,autoScrollToEnd);
 
 @override
 String toString() {
-  return 'LogsState(logs: $logs, keywords: $keywords, query: $query, autoScrollToEnd: $autoScrollToEnd)';
+  return 'LogsState(logs: $logs, sources: $sources, levels: $levels, query: $query, useRegex: $useRegex, autoScrollToEnd: $autoScrollToEnd)';
 }
 
 
@@ -1507,7 +1510,7 @@ abstract mixin class $LogsStateCopyWith<$Res>  {
   factory $LogsStateCopyWith(LogsState value, $Res Function(LogsState) _then) = _$LogsStateCopyWithImpl;
 @useResult
 $Res call({
- List<Log> logs, List<String> keywords, String query, bool autoScrollToEnd
+ List<Log> logs, Set<LogSource> sources, Set<LogLevel> levels, String query, bool useRegex, bool autoScrollToEnd
 });
 
 
@@ -1524,12 +1527,14 @@ class _$LogsStateCopyWithImpl<$Res>
 
 /// Create a copy of LogsState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? logs = null,Object? keywords = null,Object? query = null,Object? autoScrollToEnd = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? logs = null,Object? sources = null,Object? levels = null,Object? query = null,Object? useRegex = null,Object? autoScrollToEnd = null,}) {
   return _then(_self.copyWith(
 logs: null == logs ? _self.logs : logs // ignore: cast_nullable_to_non_nullable
-as List<Log>,keywords: null == keywords ? _self.keywords : keywords // ignore: cast_nullable_to_non_nullable
-as List<String>,query: null == query ? _self.query : query // ignore: cast_nullable_to_non_nullable
-as String,autoScrollToEnd: null == autoScrollToEnd ? _self.autoScrollToEnd : autoScrollToEnd // ignore: cast_nullable_to_non_nullable
+as List<Log>,sources: null == sources ? _self.sources : sources // ignore: cast_nullable_to_non_nullable
+as Set<LogSource>,levels: null == levels ? _self.levels : levels // ignore: cast_nullable_to_non_nullable
+as Set<LogLevel>,query: null == query ? _self.query : query // ignore: cast_nullable_to_non_nullable
+as String,useRegex: null == useRegex ? _self.useRegex : useRegex // ignore: cast_nullable_to_non_nullable
+as bool,autoScrollToEnd: null == autoScrollToEnd ? _self.autoScrollToEnd : autoScrollToEnd // ignore: cast_nullable_to_non_nullable
 as bool,
   ));
 }
@@ -1615,10 +1620,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<Log> logs,  List<String> keywords,  String query,  bool autoScrollToEnd)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<Log> logs,  Set<LogSource> sources,  Set<LogLevel> levels,  String query,  bool useRegex,  bool autoScrollToEnd)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _LogsState() when $default != null:
-return $default(_that.logs,_that.keywords,_that.query,_that.autoScrollToEnd);case _:
+return $default(_that.logs,_that.sources,_that.levels,_that.query,_that.useRegex,_that.autoScrollToEnd);case _:
   return orElse();
 
 }
@@ -1636,10 +1641,10 @@ return $default(_that.logs,_that.keywords,_that.query,_that.autoScrollToEnd);cas
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<Log> logs,  List<String> keywords,  String query,  bool autoScrollToEnd)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<Log> logs,  Set<LogSource> sources,  Set<LogLevel> levels,  String query,  bool useRegex,  bool autoScrollToEnd)  $default,) {final _that = this;
 switch (_that) {
 case _LogsState():
-return $default(_that.logs,_that.keywords,_that.query,_that.autoScrollToEnd);case _:
+return $default(_that.logs,_that.sources,_that.levels,_that.query,_that.useRegex,_that.autoScrollToEnd);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -1656,10 +1661,10 @@ return $default(_that.logs,_that.keywords,_that.query,_that.autoScrollToEnd);cas
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<Log> logs,  List<String> keywords,  String query,  bool autoScrollToEnd)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<Log> logs,  Set<LogSource> sources,  Set<LogLevel> levels,  String query,  bool useRegex,  bool autoScrollToEnd)?  $default,) {final _that = this;
 switch (_that) {
 case _LogsState() when $default != null:
-return $default(_that.logs,_that.keywords,_that.query,_that.autoScrollToEnd);case _:
+return $default(_that.logs,_that.sources,_that.levels,_that.query,_that.useRegex,_that.autoScrollToEnd);case _:
   return null;
 
 }
@@ -1671,7 +1676,7 @@ return $default(_that.logs,_that.keywords,_that.query,_that.autoScrollToEnd);cas
 
 
 class _LogsState implements LogsState {
-  const _LogsState({final  List<Log> logs = const [], final  List<String> keywords = const [], this.query = '', this.autoScrollToEnd = true}): _logs = logs,_keywords = keywords;
+  const _LogsState({final  List<Log> logs = const [], final  Set<LogSource> sources = const {}, final  Set<LogLevel> levels = const {}, this.query = '', this.useRegex = false, this.autoScrollToEnd = true}): _logs = logs,_sources = sources,_levels = levels;
   
 
  final  List<Log> _logs;
@@ -1681,14 +1686,22 @@ class _LogsState implements LogsState {
   return EqualUnmodifiableListView(_logs);
 }
 
- final  List<String> _keywords;
-@override@JsonKey() List<String> get keywords {
-  if (_keywords is EqualUnmodifiableListView) return _keywords;
+ final  Set<LogSource> _sources;
+@override@JsonKey() Set<LogSource> get sources {
+  if (_sources is EqualUnmodifiableSetView) return _sources;
   // ignore: implicit_dynamic_type
-  return EqualUnmodifiableListView(_keywords);
+  return EqualUnmodifiableSetView(_sources);
+}
+
+ final  Set<LogLevel> _levels;
+@override@JsonKey() Set<LogLevel> get levels {
+  if (_levels is EqualUnmodifiableSetView) return _levels;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableSetView(_levels);
 }
 
 @override@JsonKey() final  String query;
+@override@JsonKey() final  bool useRegex;
 @override@JsonKey() final  bool autoScrollToEnd;
 
 /// Create a copy of LogsState
@@ -1701,16 +1714,16 @@ _$LogsStateCopyWith<_LogsState> get copyWith => __$LogsStateCopyWithImpl<_LogsSt
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _LogsState&&const DeepCollectionEquality().equals(other._logs, _logs)&&const DeepCollectionEquality().equals(other._keywords, _keywords)&&(identical(other.query, query) || other.query == query)&&(identical(other.autoScrollToEnd, autoScrollToEnd) || other.autoScrollToEnd == autoScrollToEnd));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _LogsState&&const DeepCollectionEquality().equals(other._logs, _logs)&&const DeepCollectionEquality().equals(other._sources, _sources)&&const DeepCollectionEquality().equals(other._levels, _levels)&&(identical(other.query, query) || other.query == query)&&(identical(other.useRegex, useRegex) || other.useRegex == useRegex)&&(identical(other.autoScrollToEnd, autoScrollToEnd) || other.autoScrollToEnd == autoScrollToEnd));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_logs),const DeepCollectionEquality().hash(_keywords),query,autoScrollToEnd);
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_logs),const DeepCollectionEquality().hash(_sources),const DeepCollectionEquality().hash(_levels),query,useRegex,autoScrollToEnd);
 
 @override
 String toString() {
-  return 'LogsState(logs: $logs, keywords: $keywords, query: $query, autoScrollToEnd: $autoScrollToEnd)';
+  return 'LogsState(logs: $logs, sources: $sources, levels: $levels, query: $query, useRegex: $useRegex, autoScrollToEnd: $autoScrollToEnd)';
 }
 
 
@@ -1721,7 +1734,7 @@ abstract mixin class _$LogsStateCopyWith<$Res> implements $LogsStateCopyWith<$Re
   factory _$LogsStateCopyWith(_LogsState value, $Res Function(_LogsState) _then) = __$LogsStateCopyWithImpl;
 @override @useResult
 $Res call({
- List<Log> logs, List<String> keywords, String query, bool autoScrollToEnd
+ List<Log> logs, Set<LogSource> sources, Set<LogLevel> levels, String query, bool useRegex, bool autoScrollToEnd
 });
 
 
@@ -1738,12 +1751,14 @@ class __$LogsStateCopyWithImpl<$Res>
 
 /// Create a copy of LogsState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? logs = null,Object? keywords = null,Object? query = null,Object? autoScrollToEnd = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? logs = null,Object? sources = null,Object? levels = null,Object? query = null,Object? useRegex = null,Object? autoScrollToEnd = null,}) {
   return _then(_LogsState(
 logs: null == logs ? _self._logs : logs // ignore: cast_nullable_to_non_nullable
-as List<Log>,keywords: null == keywords ? _self._keywords : keywords // ignore: cast_nullable_to_non_nullable
-as List<String>,query: null == query ? _self.query : query // ignore: cast_nullable_to_non_nullable
-as String,autoScrollToEnd: null == autoScrollToEnd ? _self.autoScrollToEnd : autoScrollToEnd // ignore: cast_nullable_to_non_nullable
+as List<Log>,sources: null == sources ? _self._sources : sources // ignore: cast_nullable_to_non_nullable
+as Set<LogSource>,levels: null == levels ? _self._levels : levels // ignore: cast_nullable_to_non_nullable
+as Set<LogLevel>,query: null == query ? _self.query : query // ignore: cast_nullable_to_non_nullable
+as String,useRegex: null == useRegex ? _self.useRegex : useRegex // ignore: cast_nullable_to_non_nullable
+as bool,autoScrollToEnd: null == autoScrollToEnd ? _self.autoScrollToEnd : autoScrollToEnd // ignore: cast_nullable_to_non_nullable
 as bool,
   ));
 }
@@ -1754,7 +1769,7 @@ as bool,
 /// @nodoc
 mixin _$TrackerInfosState {
 
- List<TrackerInfo> get trackerInfos; List<String> get keywords; String get query; bool get autoScrollToEnd;
+ List<TrackerInfo> get trackerInfos; List<String> get keywords; String get query; bool get useRegex; bool get autoScrollToEnd;
 /// Create a copy of TrackerInfosState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -1765,16 +1780,16 @@ $TrackerInfosStateCopyWith<TrackerInfosState> get copyWith => _$TrackerInfosStat
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is TrackerInfosState&&const DeepCollectionEquality().equals(other.trackerInfos, trackerInfos)&&const DeepCollectionEquality().equals(other.keywords, keywords)&&(identical(other.query, query) || other.query == query)&&(identical(other.autoScrollToEnd, autoScrollToEnd) || other.autoScrollToEnd == autoScrollToEnd));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is TrackerInfosState&&const DeepCollectionEquality().equals(other.trackerInfos, trackerInfos)&&const DeepCollectionEquality().equals(other.keywords, keywords)&&(identical(other.query, query) || other.query == query)&&(identical(other.useRegex, useRegex) || other.useRegex == useRegex)&&(identical(other.autoScrollToEnd, autoScrollToEnd) || other.autoScrollToEnd == autoScrollToEnd));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(trackerInfos),const DeepCollectionEquality().hash(keywords),query,autoScrollToEnd);
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(trackerInfos),const DeepCollectionEquality().hash(keywords),query,useRegex,autoScrollToEnd);
 
 @override
 String toString() {
-  return 'TrackerInfosState(trackerInfos: $trackerInfos, keywords: $keywords, query: $query, autoScrollToEnd: $autoScrollToEnd)';
+  return 'TrackerInfosState(trackerInfos: $trackerInfos, keywords: $keywords, query: $query, useRegex: $useRegex, autoScrollToEnd: $autoScrollToEnd)';
 }
 
 
@@ -1785,7 +1800,7 @@ abstract mixin class $TrackerInfosStateCopyWith<$Res>  {
   factory $TrackerInfosStateCopyWith(TrackerInfosState value, $Res Function(TrackerInfosState) _then) = _$TrackerInfosStateCopyWithImpl;
 @useResult
 $Res call({
- List<TrackerInfo> trackerInfos, List<String> keywords, String query, bool autoScrollToEnd
+ List<TrackerInfo> trackerInfos, List<String> keywords, String query, bool useRegex, bool autoScrollToEnd
 });
 
 
@@ -1802,12 +1817,13 @@ class _$TrackerInfosStateCopyWithImpl<$Res>
 
 /// Create a copy of TrackerInfosState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? trackerInfos = null,Object? keywords = null,Object? query = null,Object? autoScrollToEnd = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? trackerInfos = null,Object? keywords = null,Object? query = null,Object? useRegex = null,Object? autoScrollToEnd = null,}) {
   return _then(_self.copyWith(
 trackerInfos: null == trackerInfos ? _self.trackerInfos : trackerInfos // ignore: cast_nullable_to_non_nullable
 as List<TrackerInfo>,keywords: null == keywords ? _self.keywords : keywords // ignore: cast_nullable_to_non_nullable
 as List<String>,query: null == query ? _self.query : query // ignore: cast_nullable_to_non_nullable
-as String,autoScrollToEnd: null == autoScrollToEnd ? _self.autoScrollToEnd : autoScrollToEnd // ignore: cast_nullable_to_non_nullable
+as String,useRegex: null == useRegex ? _self.useRegex : useRegex // ignore: cast_nullable_to_non_nullable
+as bool,autoScrollToEnd: null == autoScrollToEnd ? _self.autoScrollToEnd : autoScrollToEnd // ignore: cast_nullable_to_non_nullable
 as bool,
   ));
 }
@@ -1893,10 +1909,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<TrackerInfo> trackerInfos,  List<String> keywords,  String query,  bool autoScrollToEnd)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<TrackerInfo> trackerInfos,  List<String> keywords,  String query,  bool useRegex,  bool autoScrollToEnd)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _TrackerInfosState() when $default != null:
-return $default(_that.trackerInfos,_that.keywords,_that.query,_that.autoScrollToEnd);case _:
+return $default(_that.trackerInfos,_that.keywords,_that.query,_that.useRegex,_that.autoScrollToEnd);case _:
   return orElse();
 
 }
@@ -1914,10 +1930,10 @@ return $default(_that.trackerInfos,_that.keywords,_that.query,_that.autoScrollTo
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<TrackerInfo> trackerInfos,  List<String> keywords,  String query,  bool autoScrollToEnd)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<TrackerInfo> trackerInfos,  List<String> keywords,  String query,  bool useRegex,  bool autoScrollToEnd)  $default,) {final _that = this;
 switch (_that) {
 case _TrackerInfosState():
-return $default(_that.trackerInfos,_that.keywords,_that.query,_that.autoScrollToEnd);case _:
+return $default(_that.trackerInfos,_that.keywords,_that.query,_that.useRegex,_that.autoScrollToEnd);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -1934,10 +1950,10 @@ return $default(_that.trackerInfos,_that.keywords,_that.query,_that.autoScrollTo
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<TrackerInfo> trackerInfos,  List<String> keywords,  String query,  bool autoScrollToEnd)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<TrackerInfo> trackerInfos,  List<String> keywords,  String query,  bool useRegex,  bool autoScrollToEnd)?  $default,) {final _that = this;
 switch (_that) {
 case _TrackerInfosState() when $default != null:
-return $default(_that.trackerInfos,_that.keywords,_that.query,_that.autoScrollToEnd);case _:
+return $default(_that.trackerInfos,_that.keywords,_that.query,_that.useRegex,_that.autoScrollToEnd);case _:
   return null;
 
 }
@@ -1949,7 +1965,7 @@ return $default(_that.trackerInfos,_that.keywords,_that.query,_that.autoScrollTo
 
 
 class _TrackerInfosState implements TrackerInfosState {
-  const _TrackerInfosState({final  List<TrackerInfo> trackerInfos = const [], final  List<String> keywords = const [], this.query = '', this.autoScrollToEnd = true}): _trackerInfos = trackerInfos,_keywords = keywords;
+  const _TrackerInfosState({final  List<TrackerInfo> trackerInfos = const [], final  List<String> keywords = const [], this.query = '', this.useRegex = false, this.autoScrollToEnd = true}): _trackerInfos = trackerInfos,_keywords = keywords;
   
 
  final  List<TrackerInfo> _trackerInfos;
@@ -1967,6 +1983,7 @@ class _TrackerInfosState implements TrackerInfosState {
 }
 
 @override@JsonKey() final  String query;
+@override@JsonKey() final  bool useRegex;
 @override@JsonKey() final  bool autoScrollToEnd;
 
 /// Create a copy of TrackerInfosState
@@ -1979,16 +1996,16 @@ _$TrackerInfosStateCopyWith<_TrackerInfosState> get copyWith => __$TrackerInfosS
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _TrackerInfosState&&const DeepCollectionEquality().equals(other._trackerInfos, _trackerInfos)&&const DeepCollectionEquality().equals(other._keywords, _keywords)&&(identical(other.query, query) || other.query == query)&&(identical(other.autoScrollToEnd, autoScrollToEnd) || other.autoScrollToEnd == autoScrollToEnd));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _TrackerInfosState&&const DeepCollectionEquality().equals(other._trackerInfos, _trackerInfos)&&const DeepCollectionEquality().equals(other._keywords, _keywords)&&(identical(other.query, query) || other.query == query)&&(identical(other.useRegex, useRegex) || other.useRegex == useRegex)&&(identical(other.autoScrollToEnd, autoScrollToEnd) || other.autoScrollToEnd == autoScrollToEnd));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_trackerInfos),const DeepCollectionEquality().hash(_keywords),query,autoScrollToEnd);
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_trackerInfos),const DeepCollectionEquality().hash(_keywords),query,useRegex,autoScrollToEnd);
 
 @override
 String toString() {
-  return 'TrackerInfosState(trackerInfos: $trackerInfos, keywords: $keywords, query: $query, autoScrollToEnd: $autoScrollToEnd)';
+  return 'TrackerInfosState(trackerInfos: $trackerInfos, keywords: $keywords, query: $query, useRegex: $useRegex, autoScrollToEnd: $autoScrollToEnd)';
 }
 
 
@@ -1999,7 +2016,7 @@ abstract mixin class _$TrackerInfosStateCopyWith<$Res> implements $TrackerInfosS
   factory _$TrackerInfosStateCopyWith(_TrackerInfosState value, $Res Function(_TrackerInfosState) _then) = __$TrackerInfosStateCopyWithImpl;
 @override @useResult
 $Res call({
- List<TrackerInfo> trackerInfos, List<String> keywords, String query, bool autoScrollToEnd
+ List<TrackerInfo> trackerInfos, List<String> keywords, String query, bool useRegex, bool autoScrollToEnd
 });
 
 
@@ -2016,12 +2033,13 @@ class __$TrackerInfosStateCopyWithImpl<$Res>
 
 /// Create a copy of TrackerInfosState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? trackerInfos = null,Object? keywords = null,Object? query = null,Object? autoScrollToEnd = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? trackerInfos = null,Object? keywords = null,Object? query = null,Object? useRegex = null,Object? autoScrollToEnd = null,}) {
   return _then(_TrackerInfosState(
 trackerInfos: null == trackerInfos ? _self._trackerInfos : trackerInfos // ignore: cast_nullable_to_non_nullable
 as List<TrackerInfo>,keywords: null == keywords ? _self._keywords : keywords // ignore: cast_nullable_to_non_nullable
 as List<String>,query: null == query ? _self.query : query // ignore: cast_nullable_to_non_nullable
-as String,autoScrollToEnd: null == autoScrollToEnd ? _self.autoScrollToEnd : autoScrollToEnd // ignore: cast_nullable_to_non_nullable
+as String,useRegex: null == useRegex ? _self.useRegex : useRegex // ignore: cast_nullable_to_non_nullable
+as bool,autoScrollToEnd: null == autoScrollToEnd ? _self.autoScrollToEnd : autoScrollToEnd // ignore: cast_nullable_to_non_nullable
 as bool,
   ));
 }
@@ -4156,7 +4174,7 @@ as String,
 /// @nodoc
 mixin _$HotKeyAction {
 
- HotAction get action; int? get key; Set<KeyboardModifier> get modifiers;
+@JsonKey(unknownEnumValue: HotAction.start) HotAction get action; int? get key; Set<KeyboardModifier> get modifiers;
 /// Create a copy of HotKeyAction
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -4189,7 +4207,7 @@ abstract mixin class $HotKeyActionCopyWith<$Res>  {
   factory $HotKeyActionCopyWith(HotKeyAction value, $Res Function(HotKeyAction) _then) = _$HotKeyActionCopyWithImpl;
 @useResult
 $Res call({
- HotAction action, int? key, Set<KeyboardModifier> modifiers
+@JsonKey(unknownEnumValue: HotAction.start) HotAction action, int? key, Set<KeyboardModifier> modifiers
 });
 
 
@@ -4296,7 +4314,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( HotAction action,  int? key,  Set<KeyboardModifier> modifiers)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(unknownEnumValue: HotAction.start)  HotAction action,  int? key,  Set<KeyboardModifier> modifiers)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _HotKeyAction() when $default != null:
 return $default(_that.action,_that.key,_that.modifiers);case _:
@@ -4317,7 +4335,7 @@ return $default(_that.action,_that.key,_that.modifiers);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( HotAction action,  int? key,  Set<KeyboardModifier> modifiers)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(unknownEnumValue: HotAction.start)  HotAction action,  int? key,  Set<KeyboardModifier> modifiers)  $default,) {final _that = this;
 switch (_that) {
 case _HotKeyAction():
 return $default(_that.action,_that.key,_that.modifiers);case _:
@@ -4337,7 +4355,7 @@ return $default(_that.action,_that.key,_that.modifiers);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( HotAction action,  int? key,  Set<KeyboardModifier> modifiers)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(unknownEnumValue: HotAction.start)  HotAction action,  int? key,  Set<KeyboardModifier> modifiers)?  $default,) {final _that = this;
 switch (_that) {
 case _HotKeyAction() when $default != null:
 return $default(_that.action,_that.key,_that.modifiers);case _:
@@ -4352,10 +4370,10 @@ return $default(_that.action,_that.key,_that.modifiers);case _:
 @JsonSerializable()
 
 class _HotKeyAction implements HotKeyAction {
-  const _HotKeyAction({required this.action, this.key, final  Set<KeyboardModifier> modifiers = const {}}): _modifiers = modifiers;
+  const _HotKeyAction({@JsonKey(unknownEnumValue: HotAction.start) required this.action, this.key, final  Set<KeyboardModifier> modifiers = const {}}): _modifiers = modifiers;
   factory _HotKeyAction.fromJson(Map<String, dynamic> json) => _$HotKeyActionFromJson(json);
 
-@override final  HotAction action;
+@override@JsonKey(unknownEnumValue: HotAction.start) final  HotAction action;
 @override final  int? key;
  final  Set<KeyboardModifier> _modifiers;
 @override@JsonKey() Set<KeyboardModifier> get modifiers {
@@ -4398,7 +4416,7 @@ abstract mixin class _$HotKeyActionCopyWith<$Res> implements $HotKeyActionCopyWi
   factory _$HotKeyActionCopyWith(_HotKeyAction value, $Res Function(_HotKeyAction) _then) = __$HotKeyActionCopyWithImpl;
 @override @useResult
 $Res call({
- HotAction action, int? key, Set<KeyboardModifier> modifiers
+@JsonKey(unknownEnumValue: HotAction.start) HotAction action, int? key, Set<KeyboardModifier> modifiers
 });
 
 
@@ -5745,7 +5763,7 @@ as String,
 /// @nodoc
 mixin _$IconButtonData {
 
- IconData get icon; VoidCallback get onPressed;
+ IconData get icon; VoidCallback get onPressed; String? get tooltip;
 /// Create a copy of IconButtonData
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -5756,16 +5774,16 @@ $IconButtonDataCopyWith<IconButtonData> get copyWith => _$IconButtonDataCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is IconButtonData&&(identical(other.icon, icon) || other.icon == icon)&&(identical(other.onPressed, onPressed) || other.onPressed == onPressed));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is IconButtonData&&(identical(other.icon, icon) || other.icon == icon)&&(identical(other.onPressed, onPressed) || other.onPressed == onPressed)&&(identical(other.tooltip, tooltip) || other.tooltip == tooltip));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,icon,onPressed);
+int get hashCode => Object.hash(runtimeType,icon,onPressed,tooltip);
 
 @override
 String toString() {
-  return 'IconButtonData(icon: $icon, onPressed: $onPressed)';
+  return 'IconButtonData(icon: $icon, onPressed: $onPressed, tooltip: $tooltip)';
 }
 
 
@@ -5776,7 +5794,7 @@ abstract mixin class $IconButtonDataCopyWith<$Res>  {
   factory $IconButtonDataCopyWith(IconButtonData value, $Res Function(IconButtonData) _then) = _$IconButtonDataCopyWithImpl;
 @useResult
 $Res call({
- IconData icon, VoidCallback onPressed
+ IconData icon, VoidCallback onPressed, String? tooltip
 });
 
 
@@ -5793,11 +5811,12 @@ class _$IconButtonDataCopyWithImpl<$Res>
 
 /// Create a copy of IconButtonData
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? icon = null,Object? onPressed = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? icon = null,Object? onPressed = null,Object? tooltip = freezed,}) {
   return _then(_self.copyWith(
 icon: null == icon ? _self.icon : icon // ignore: cast_nullable_to_non_nullable
 as IconData,onPressed: null == onPressed ? _self.onPressed : onPressed // ignore: cast_nullable_to_non_nullable
-as VoidCallback,
+as VoidCallback,tooltip: freezed == tooltip ? _self.tooltip : tooltip // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 
@@ -5882,10 +5901,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( IconData icon,  VoidCallback onPressed)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( IconData icon,  VoidCallback onPressed,  String? tooltip)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _IconButtonData() when $default != null:
-return $default(_that.icon,_that.onPressed);case _:
+return $default(_that.icon,_that.onPressed,_that.tooltip);case _:
   return orElse();
 
 }
@@ -5903,10 +5922,10 @@ return $default(_that.icon,_that.onPressed);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( IconData icon,  VoidCallback onPressed)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( IconData icon,  VoidCallback onPressed,  String? tooltip)  $default,) {final _that = this;
 switch (_that) {
 case _IconButtonData():
-return $default(_that.icon,_that.onPressed);case _:
+return $default(_that.icon,_that.onPressed,_that.tooltip);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -5923,10 +5942,10 @@ return $default(_that.icon,_that.onPressed);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( IconData icon,  VoidCallback onPressed)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( IconData icon,  VoidCallback onPressed,  String? tooltip)?  $default,) {final _that = this;
 switch (_that) {
 case _IconButtonData() when $default != null:
-return $default(_that.icon,_that.onPressed);case _:
+return $default(_that.icon,_that.onPressed,_that.tooltip);case _:
   return null;
 
 }
@@ -5938,11 +5957,12 @@ return $default(_that.icon,_that.onPressed);case _:
 
 
 class _IconButtonData implements IconButtonData {
-  const _IconButtonData({required this.icon, required this.onPressed});
+  const _IconButtonData({required this.icon, required this.onPressed, this.tooltip});
   
 
 @override final  IconData icon;
 @override final  VoidCallback onPressed;
+@override final  String? tooltip;
 
 /// Create a copy of IconButtonData
 /// with the given fields replaced by the non-null parameter values.
@@ -5954,16 +5974,16 @@ _$IconButtonDataCopyWith<_IconButtonData> get copyWith => __$IconButtonDataCopyW
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _IconButtonData&&(identical(other.icon, icon) || other.icon == icon)&&(identical(other.onPressed, onPressed) || other.onPressed == onPressed));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _IconButtonData&&(identical(other.icon, icon) || other.icon == icon)&&(identical(other.onPressed, onPressed) || other.onPressed == onPressed)&&(identical(other.tooltip, tooltip) || other.tooltip == tooltip));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,icon,onPressed);
+int get hashCode => Object.hash(runtimeType,icon,onPressed,tooltip);
 
 @override
 String toString() {
-  return 'IconButtonData(icon: $icon, onPressed: $onPressed)';
+  return 'IconButtonData(icon: $icon, onPressed: $onPressed, tooltip: $tooltip)';
 }
 
 
@@ -5974,7 +5994,7 @@ abstract mixin class _$IconButtonDataCopyWith<$Res> implements $IconButtonDataCo
   factory _$IconButtonDataCopyWith(_IconButtonData value, $Res Function(_IconButtonData) _then) = __$IconButtonDataCopyWithImpl;
 @override @useResult
 $Res call({
- IconData icon, VoidCallback onPressed
+ IconData icon, VoidCallback onPressed, String? tooltip
 });
 
 
@@ -5991,11 +6011,12 @@ class __$IconButtonDataCopyWithImpl<$Res>
 
 /// Create a copy of IconButtonData
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? icon = null,Object? onPressed = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? icon = null,Object? onPressed = null,Object? tooltip = freezed,}) {
   return _then(_IconButtonData(
 icon: null == icon ? _self.icon : icon // ignore: cast_nullable_to_non_nullable
 as IconData,onPressed: null == onPressed ? _self.onPressed : onPressed // ignore: cast_nullable_to_non_nullable
-as VoidCallback,
+as VoidCallback,tooltip: freezed == tooltip ? _self.tooltip : tooltip // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 

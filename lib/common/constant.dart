@@ -12,7 +12,6 @@ import 'package:flutter/material.dart';
 const appName = 'FlClash';
 const appHelperService = 'FlClashHelperService';
 const coreManifestName = 'manifest.json';
-const coreName = 'clash.meta';
 const browserUa =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const packageName = 'com.follow.clash';
@@ -58,10 +57,11 @@ const animateDuration = Duration(milliseconds: 100);
 const midDuration = Duration(milliseconds: 200);
 const commonDuration = Duration(milliseconds: 300);
 const defaultUpdateDuration = Duration(days: 1);
-const MMDB = 'GEOIP.metadb';
+const MMDB = 'GeoIP.metadb';
 const ASN = 'ASN.mmdb';
-const GEOIP = 'GEOIP.dat';
-const GEOSITE = 'GEOSITE.dat';
+const GEOIP = 'GeoIP.dat';
+const GEOSITE = 'GeoSite.dat';
+const BUNDLE_MRS = 'BundleMRS.7z';
 final double kHeaderHeight = system.isDesktop
     ? !system.isMacOS
           ? 40
@@ -72,11 +72,12 @@ const localhost = '127.0.0.1';
 const clashConfigKey = 'clash_config';
 const configKey = 'config';
 const double dialogCommonWidth = 300;
-const repository = 'chen08209/FlClash';
-const defaultExternalController = '127.0.0.1:9090';
+const repository = 'chenx-dust/FlClash-Patched';
+const defaultExternalControllerPort = 9090;
 const maxMobileWidth = 600;
 const maxLaptopWidth = 840;
 const defaultTestUrl = 'https://www.gstatic.com/generate_204';
+const compatibleProxyName = 'COMPATIBLE';
 final commonFilter = ImageFilter.blur(
   sigmaX: 5,
   sigmaY: 5,

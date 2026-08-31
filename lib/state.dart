@@ -28,13 +28,13 @@ class GlobalState {
   final navigatorKey = GlobalKey<NavigatorState>();
   late final String appEnv;
   late final PackageInfo packageInfo;
+  final isBackground = ValueNotifier<bool>(false);
   Function? updateCurrentDelayDebounce;
   late Measure measure;
   late CommonTheme theme;
   Color accentColor = const Color(defaultPrimaryColor);
   late ProviderContainer container;
   bool needInitStatus = true;
-  bool _didCrashOnPreviousExecution = false;
 
   bool get isPre => appEnv != 'stable';
 
@@ -48,7 +48,7 @@ class GlobalState {
   // ignore: deprecated_member_use
   CorePalette? corePalette;
   String? lastConfigMd5;
-  VpnState? lastVpnState;
+  VpnOptions? lastVpnOptions;
   bool isAttach = false;
 
   GlobalState._internal();
@@ -82,14 +82,29 @@ class GlobalState {
 
   BuildContext get _context => navigatorKey.currentContext!;
 
+  void handleBackground() async {
+    commonPrint.log('background', logLevel: LogLevel.debug);
+    if (isBackground.value) {
+      return;
+    }
+    isBackground.value = true;
+    render?.pause();
+    foregroundTicker.pause();
+  }
+
+  void handleForeground() {
+    commonPrint.log('foreground', logLevel: LogLevel.debug);
+    foregroundTicker.resume();
+    if (!isBackground.value) {
+      return;
+    }
+    isBackground.value = false;
+    render?.resume();
+  }
+
   Future<ProviderContainer> _initData(int version) async {
     packageInfo = await PackageInfo.fromPlatform();
-    var config = await migration.run();
-    _didCrashOnPreviousExecution = await system.didCrashOnPreviousExecution();
-    if (_didCrashOnPreviousExecution) {
-      config = config.copyWith(currentProfileId: null);
-      await preferences.saveConfig(config);
-    }
+    final config = await migration.run();
     final appState = AppState(
       brightness: WidgetsBinding.instance.platformDispatcher.platformBrightness,
       version: version,
@@ -104,6 +119,14 @@ class GlobalState {
     final configOverrides = buildConfigOverrides(config);
     container = ProviderContainer(
       overrides: [...appStateOverrides, ...configOverrides],
+    );
+    foregroundTicker.updateSettings(
+      interval: Duration(
+        seconds: config.appSettingProps.foregroundTickerInterval,
+      ),
+      slowInterval: Duration(
+        seconds: config.appSettingProps.foregroundTickerIdleInterval,
+      ),
     );
     final profiles = await database.profilesDao.query().get();
     container.read(profilesProvider.notifier).setAndReorder(profiles);
@@ -154,7 +177,7 @@ class GlobalState {
     } catch (e, s) {
       commonPrint.log('$title ===> $e, $s', logLevel: LogLevel.warning);
       if (silence) {
-        showNotifier(e.toString());
+        showNotifier(e.toString(), allowCopy: true);
       } else {
         showMessage(
           title: title ?? currentAppLocalizations.tip,
@@ -276,11 +299,19 @@ class GlobalState {
     );
   }
 
-  void showNotifier(String text, {MessageActionState? actionState}) {
+  void showNotifier(
+    String text, {
+    MessageActionState? actionState,
+    bool allowCopy = false,
+  }) {
     if (text.isEmpty) {
       return;
     }
-    navigatorKey.currentContext?.showNotifier(text, actionState: actionState);
+    navigatorKey.currentContext?.showNotifier(
+      text,
+      actionState: actionState,
+      allowCopy: allowCopy,
+    );
   }
 
   Future<void> openUrl(String url) async {
@@ -315,7 +346,11 @@ class GlobalState {
     container.read(systemActionProvider.notifier).updateTray();
     container.read(profilesActionProvider.notifier).autoUpdateProfiles();
     container.read(commonActionProvider.notifier).autoCheckUpdate();
-    autoLaunch?.updateStatus(container.read(appSettingProvider).autoLaunch);
+    final appSetting = container.read(appSettingProvider);
+    autoLaunch?.updateStatus(
+      isAutoLaunch: appSetting.autoLaunch,
+      isHighPriorityAutoLaunch: appSetting.highPriorityAutoLaunch,
+    );
     if (!container.read(appSettingProvider).silentLaunch) {
       window?.show();
     } else {
@@ -323,24 +358,10 @@ class GlobalState {
     }
     await _handleFailedPreference();
     await _handlerDisclaimer();
-    await _showCrashRecoveryTip();
-    await _showCrashlyticsTip();
     await container.read(coreActionProvider.notifier).startCore();
-    if (!_didCrashOnPreviousExecution) {
-      await container.read(setupActionProvider.notifier).initStatus();
-    }
+    await container.read(setupActionProvider.notifier).initStatus();
     container.read(initProvider.notifier).value = true;
     permissions.check();
-  }
-
-  Future<void> _showCrashRecoveryTip() async {
-    if (!_didCrashOnPreviousExecution) return;
-    await showMessage(
-      title: currentAppLocalizations.crashDetected,
-      cancelable: false,
-      dismissible: false,
-      message: TextSpan(text: currentAppLocalizations.crashDetectedTip),
-    );
   }
 
   Future<void> _handleFailedPreference() async {
@@ -381,29 +402,13 @@ class GlobalState {
         false;
   }
 
-  Future<void> _showCrashlyticsTip() async {
-    if (!system.isAndroid) return;
-    if (container.read(
-      appSettingProvider.select((state) => state.crashlyticsTip),
-    )) {
-      return;
-    }
-    await showMessage(
-      title: currentAppLocalizations.dataCollectionTip,
-      cancelable: false,
-      message: TextSpan(text: currentAppLocalizations.dataCollectionContent),
-    );
-    container
-        .read(appSettingProvider.notifier)
-        .update((state) => state.copyWith(crashlyticsTip: true));
-  }
-
   Future<void> _handlerDisclaimer() async {
     if (container.read(
       appSettingProvider.select((state) => state.disclaimerAccepted),
     )) {
       return;
     }
+    await WidgetsBinding.instance.endOfFrame;
     final isDisclaimerAccepted = await showDisclaimer();
     if (!isDisclaimerAccepted) {
       await container.read(systemActionProvider.notifier).handleExit();

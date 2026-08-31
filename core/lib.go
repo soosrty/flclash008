@@ -13,21 +13,23 @@ import (
 	t "core/tun"
 	"encoding/json"
 	"errors"
-	"github.com/metacubex/mihomo/component/dialer"
-	"github.com/metacubex/mihomo/component/process"
-	"github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/dns"
-	"github.com/metacubex/mihomo/listener/sing_tun"
-	"github.com/metacubex/mihomo/log"
-	"golang.org/x/sync/semaphore"
 	"net"
-	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
+
+	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/process"
+	"github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/listener/sing_tun"
+	"github.com/metacubex/mihomo/log"
+	"golang.org/x/sync/semaphore"
 )
 
-var eventListener unsafe.Pointer
+var (
+	eventListenerMu sync.RWMutex
+	eventListener   unsafe.Pointer
+)
 
 type TunHandler struct {
 	listener *sing_tun.Listener
@@ -36,13 +38,13 @@ type TunHandler struct {
 	limit *semaphore.Weighted
 }
 
-func (th *TunHandler) start(fd int, stack, address, dns string) {
+func (th *TunHandler) start(fd int, options t.Options) {
 	runLock.Lock()
 	defer runLock.Unlock()
 	_ = th.limit.Acquire(context.TODO(), 4)
 	defer th.limit.Release(4)
 	th.initHook()
-	tunListener := t.Start(fd, stack, address, dns)
+	tunListener := t.Start(fd, options)
 	if tunListener != nil {
 		log.Infoln("TUN address: %v", tunListener.Address())
 		th.listener = tunListener
@@ -84,7 +86,7 @@ func (th *TunHandler) handleResolveProcess(source, target net.Addr) string {
 	_ = th.limit.Acquire(context.Background(), 1)
 	defer th.limit.Release(1)
 
-	if th.listener == nil {
+	if th.listener == nil || th.callback == nil {
 		return ""
 	}
 	var protocol int
@@ -138,7 +140,7 @@ func handleStopTun() {
 	}
 }
 
-func handleStartTun(callback unsafe.Pointer, fd int, stack, address, dns string) {
+func handleStartTun(callback unsafe.Pointer, fd int, options t.Options) {
 	handleStopTun()
 	tunLock.Lock()
 	defer tunLock.Unlock()
@@ -147,25 +149,32 @@ func handleStartTun(callback unsafe.Pointer, fd int, stack, address, dns string)
 			callback: callback,
 			limit:    semaphore.NewWeighted(4),
 		}
-		tunHandler.start(fd, stack, address, dns)
+		tunHandler.start(fd, options)
 	}
-}
-
-func handleUpdateDns(value string) {
-	go func() {
-		log.Infoln("[DNS] updateDns %s", value)
-		dns.UpdateSystemDNS(strings.Split(value, ","))
-		dns.FlushCacheWithDefaultResolver()
-	}()
+	return
 }
 
 func (response MethodResponse) send() {
+	if response.callback != nil {
+		defer releaseObject(response.callback)
+	}
 	data, err := response.JSON()
 	if err != nil {
-		return
+		logError("MethodResponse marshal error: id=%s err=%v", response.ID, err)
+		data, err = (&MethodResponse{
+			ID: response.ID,
+			Error: &MethodError{
+				Code:    "serialization_error",
+				Message: "failed to serialize method response",
+				Details: err.Error(),
+			},
+		}).JSON()
+		if err != nil {
+			logError("Fallback MethodResponse marshal error: id=%s err=%v", response.ID, err)
+			return
+		}
 	}
 	invokeResult(response.callback, string(data))
-	releaseObject(response.callback)
 }
 
 func handlePlatformMethodCall(call *MethodCall, response MethodResponse) bool {
@@ -200,8 +209,16 @@ func invokeMethod(callback unsafe.Pointer, paramsChar *C.char) {
 }
 
 //export startTUN
-func startTUN(callback unsafe.Pointer, fd C.int, stackChar, addressChar, dnsChar *C.char) bool {
-	handleStartTun(callback, int(fd), takeCString(stackChar), takeCString(addressChar), takeCString(dnsChar))
+func startTUN(callback unsafe.Pointer, fd C.int, optionsChar *C.char) bool {
+	options := t.Options{}
+	if err := json.Unmarshal([]byte(takeCString(optionsChar)), &options); err != nil {
+		log.Errorln("TUN options:", err)
+		if callback != nil {
+			releaseObject(callback)
+		}
+		return false
+	}
+	handleStartTun(callback, int(fd), options)
 	if !isRunning {
 		handleStartListener()
 	} else {
@@ -234,7 +251,9 @@ func quickSetup(callback unsafe.Pointer, initParamsChar *C.char, setupParamsChar
 
 //export setEventListener
 func setEventListener(listener unsafe.Pointer) {
-	if eventListener != nil || listener == nil {
+	eventListenerMu.Lock()
+	defer eventListenerMu.Unlock()
+	if eventListener != nil {
 		releaseObject(eventListener)
 	}
 	eventListener = listener
@@ -260,9 +279,6 @@ func marshalResult(value any) string {
 }
 
 func sendMessageBatch(messages []Message) {
-	if eventListener == nil {
-		return
-	}
 	arguments, err := json.Marshal(messages)
 	if err != nil {
 		logError("Message batch marshal error: %v", err)
@@ -277,7 +293,15 @@ func sendMessageBatch(messages []Message) {
 		logError("MethodCall marshal error: method=%s err=%v", call.Method, err)
 		return
 	}
-	invokeResult(eventListener, string(data))
+	eventListenerMu.RLock()
+	if eventListener == nil {
+		eventListenerMu.RUnlock()
+		return
+	}
+	listener := retainObject(eventListener)
+	eventListenerMu.RUnlock()
+	defer releaseObject(listener)
+	invokeResult(listener, string(data))
 }
 
 //export stopTun

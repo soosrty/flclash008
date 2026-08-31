@@ -56,6 +56,57 @@ void main() {
   });
 
   test('navigation providers select items for width and current page', () {
+    NavigationItem networkingItem() => container
+        .read(navigationItemsStateProvider)
+        .value
+        .singleWhere((item) => item.label == PageLabel.networking);
+    bool showsNetworkingTool() => container
+        .read(moreToolsSelectorStateProvider)
+        .navigationItems
+        .any((item) => item.label == PageLabel.networking);
+
+    expect(networkingItem().modes, isEmpty);
+    expect(showsNetworkingTool(), isFalse);
+    container
+        .read(groupsProvider.notifier)
+        .update(
+          (_) => const [
+            Group(
+              name: 'Tailscale group',
+              type: GroupType.Selector,
+              all: [Proxy(name: 'tailnet', type: 'Tailscale')],
+            ),
+          ],
+        );
+    expect(networkingItem().modes, [NavigationItemMode.more]);
+    expect(showsNetworkingTool(), isTrue);
+    container
+        .read(groupsProvider.notifier)
+        .update(
+          (_) => const [
+            Group(
+              name: 'ZeroTier group',
+              type: GroupType.Selector,
+              all: [Proxy(name: 'zerotier', type: 'ZeroTier')],
+            ),
+          ],
+        );
+    expect(networkingItem().modes, [NavigationItemMode.more]);
+    expect(showsNetworkingTool(), isTrue);
+    container
+        .read(groupsProvider.notifier)
+        .update(
+          (_) => const [
+            Group(
+              name: 'Direct group',
+              type: GroupType.Selector,
+              all: [Proxy(name: 'DIRECT', type: 'Direct')],
+            ),
+          ],
+        );
+    expect(networkingItem().modes, isEmpty);
+    expect(showsNetworkingTool(), isFalse);
+
     container
         .read(viewSizeProvider.notifier)
         .update((_) => Size(maxMobileWidth.toDouble(), 800));
@@ -191,6 +242,7 @@ void main() {
           (state) => state.copyWith(
             systemProxy: false,
             bypassDomain: const ['localhost'],
+            routeMode: RouteMode.bypassPrivate,
             autoSetSystemDns: true,
           ),
         );
@@ -200,7 +252,11 @@ void main() {
           (state) => state.copyWith(
             mixedPort: 8899,
             mode: Mode.global,
-            tun: state.tun.copyWith(enable: true),
+            tun: state.tun.copyWith(
+              enable: true,
+              disableIcmpForwarding: true,
+              endpointIndependentNat: true,
+            ),
           ),
         );
     expect(container.read(autoSetSystemDnsStateProvider).a, isFalse);
@@ -212,7 +268,7 @@ void main() {
     final proxy = container.read(proxyStateProvider);
     expect(proxy.isStart, isTrue);
     expect(proxy.systemProxy, isFalse);
-    expect(proxy.bassDomain, ['localhost']);
+    expect(proxy.bypassDomain, ['localhost']);
     expect(proxy.port, 8899);
     expect(container.read(isStartProvider), isTrue);
 
@@ -222,9 +278,10 @@ void main() {
     expect(tray.tunEnable, isTrue);
     expect(tray.isStart, isTrue);
 
-    final vpn = container.read(vpnStateProvider);
-    expect(vpn.stack, container.read(patchClashConfigProvider).tun.stack);
-    expect(vpn.vpnProps, container.read(vpnSettingProvider));
+    final mobileTun = container.read(sharedStateProvider).vpnOptions;
+    expect(mobileTun?.routeAddress, defaultBypassPrivateRouteAddress);
+    expect(mobileTun?.disableIcmpForwarding, true);
+    expect(mobileTun?.endpointIndependentNat, true);
 
     final dns = container.read(autoSetSystemDnsStateProvider);
     expect(dns.a, isTrue);
@@ -239,6 +296,53 @@ void main() {
     container.read(currentSSIDProvider.notifier).update((_) => 'Office');
     expect(container.read(suspendProvider), isTrue);
     expect(container.read(proxyStateProvider).isStart, isFalse);
+  });
+
+  test('native VPN options track only restart-relevant settings', () async {
+    final changes = <VpnOptions?>[];
+    final subscription = container.listen(
+      vpnOptionsProvider,
+      (_, next) => changes.add(next),
+    );
+    addTearDown(subscription.close);
+
+    container
+        .read(vpnSettingProvider.notifier)
+        .update((state) => state.copyWith(networkSpeedNotification: true));
+    await container.pump();
+    expect(changes, isEmpty);
+
+    container
+        .read(patchClashConfigProvider.notifier)
+        .update(
+          (state) => state.copyWith(
+            mixedPort: 8899,
+            tun: state.tun.copyWith(
+              mtu: 1500,
+              disableIcmpForwarding: true,
+              endpointIndependentNat: true,
+            ),
+          ),
+        );
+    await container.pump();
+    expect(changes, hasLength(1));
+    expect(changes.single?.port, 8899);
+    expect(changes.single?.mtu, 1500);
+    expect(changes.single?.disableIcmpForwarding, true);
+    expect(changes.single?.endpointIndependentNat, true);
+
+    container
+        .read(networkSettingProvider.notifier)
+        .update(
+          (state) => state.copyWith(
+            bypassDomain: const ['localhost'],
+            routeMode: RouteMode.bypassPrivate,
+          ),
+        );
+    await container.pump();
+    expect(changes, hasLength(2));
+    expect(changes.last?.bypassDomain, ['localhost']);
+    expect(changes.last?.routeAddress, defaultBypassPrivateRouteAddress);
   });
 
   test('selection and delay providers resolve groups and profile state', () {

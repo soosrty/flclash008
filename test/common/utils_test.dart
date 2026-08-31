@@ -58,12 +58,12 @@ void main() {
       expect(utils.getTimeText(3661000), '01:01:01');
     });
 
-    test('formats three digit hours', () {
-      expect(utils.getTimeText(100 * 3600 * 1000), '100:00:00');
+    test('formats durations over 24 hours in days', () {
+      expect(utils.getTimeText(100 * 3600 * 1000), '4d 04:00:00');
     });
 
-    test('caps at 999:59:59', () {
-      expect(utils.getTimeText(1000 * 3600 * 1000), '999:59:59');
+    test('keeps long durations precise', () {
+      expect(utils.getTimeText(1000 * 3600 * 1000), '41d 16:00:00');
     });
   });
 
@@ -101,6 +101,33 @@ void main() {
 
     test('increments higher numbers', () {
       expect(utils.getOverwriteLabel('foo(9)'), 'foo(10)');
+    });
+  });
+
+  group('getFileNameForUrl', () {
+    test('returns last path file name without query', () {
+      expect(
+        utils.getFileNameFromUrl(
+          'https://example.com/subscriptions/my-profile.yaml?token=abc',
+        ),
+        'my-profile.yaml',
+      );
+    });
+
+    test('returns decoded file name', () {
+      expect(
+        utils.getFileNameFromUrl(
+          'https://example.com/subscriptions/%E8%AE%A2%E9%98%85.yaml',
+        ),
+        '订阅.yaml',
+      );
+    });
+
+    test('returns null when path does not look like a file', () {
+      expect(
+        utils.getFileNameFromUrl('https://example.com/api/subscribe?token=abc'),
+        isNull,
+      );
     });
   });
 

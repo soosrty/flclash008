@@ -79,6 +79,7 @@ abstract class Metadata with _$Metadata {
     @Default('') String destinationIP,
     @Default('') String destinationPort,
     @Default('') String host,
+    @JsonKey(unknownEnumValue: JsonKey.nullForUndefinedEnumValue)
     DnsMode? dnsMode,
     @Default('') String process,
     @Default('') String processPath,
@@ -134,22 +135,56 @@ extension TrackerInfoExt on TrackerInfo {
     }
     return process.trim();
   }
+
+  bool get hasSpeed => uploadSpeed != null && downloadSpeed != null;
+
+  TrackerInfo withCalculatedSpeed({
+    required TrackerInfo previous,
+    required Duration elapsed,
+  }) {
+    if (id != previous.id || elapsed <= Duration.zero) {
+      return this;
+    }
+
+    int calculateSpeed(int current, int previous) {
+      final delta = current - previous;
+      if (delta <= 0) {
+        return 0;
+      }
+      return (delta * Duration.microsecondsPerSecond / elapsed.inMicroseconds)
+          .round();
+    }
+
+    return copyWith(
+      uploadSpeed: calculateSpeed(upload, previous.upload),
+      downloadSpeed: calculateSpeed(download, previous.download),
+    );
+  }
 }
 
-String _logDateTime(dynamic _) {
-  return DateTime.now().showFull;
+int _logTimestamp(dynamic value) {
+  if (value is int) return value;
+  return DateTime.now().millisecondsSinceEpoch;
 }
 
 @freezed
 abstract class Log with _$Log {
   const factory Log({
-    @JsonKey(name: 'LogLevel') @Default(LogLevel.info) LogLevel logLevel,
+    @JsonKey(name: 'LogLevel', unknownEnumValue: LogLevel.info)
+    @Default(LogLevel.info)
+    LogLevel logLevel,
+    @Default(LogSource.app)
+    @JsonKey(unknownEnumValue: LogSource.app)
+    LogSource source,
     @JsonKey(name: 'Payload') @Default('') String payload,
-    @JsonKey(fromJson: _logDateTime) required String dateTime,
+    @JsonKey(name: 'Time', fromJson: _logTimestamp) required int timestamp,
   }) = _Log;
 
   factory Log.app(String payload) {
-    return Log(payload: payload, dateTime: _logDateTime(null));
+    return Log(
+      payload: payload,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+    );
   }
 
   factory Log.fromJson(Map<String, Object?> json) => _$LogFromJson(json);
@@ -159,21 +194,48 @@ abstract class Log with _$Log {
 abstract class LogsState with _$LogsState {
   const factory LogsState({
     @Default([]) List<Log> logs,
-    @Default([]) List<String> keywords,
+    @Default({}) Set<LogSource> sources,
+    @Default({}) Set<LogLevel> levels,
     @Default('') String query,
+    @Default(false) bool useRegex,
     @Default(true) bool autoScrollToEnd,
   }) = _LogsState;
 }
 
 extension LogsStateExt on LogsState {
+  bool get hasFilters {
+    return sources.isNotEmpty || levels.isNotEmpty;
+  }
+
+  LogsState toggleSource(LogSource source) {
+    return copyWith(sources: _toggle(sources, source));
+  }
+
+  LogsState toggleLevel(LogLevel level) {
+    return copyWith(levels: _toggle(levels, level));
+  }
+
+  LogsState clearFilters() {
+    return copyWith(sources: {}, levels: {});
+  }
+
   List<Log> get list {
-    final lowQuery = query.toLowerCase();
+    final matcher = SearchMatcher(query, useRegex: useRegex);
     return logs.where((log) {
-      final logLevelName = log.logLevel.name;
-      return {logLevelName}.containsAll(keywords) &&
-          ((log.payload.toLowerCase().contains(lowQuery)) ||
-              logLevelName.contains(lowQuery));
+      final matchesSource = sources.isEmpty || sources.contains(log.source);
+      final matchesLevel = levels.isEmpty || levels.contains(log.logLevel);
+      return matchesSource && matchesLevel && matcher.hasMatch(log.payload);
     }).toList();
+  }
+
+  Set<T> _toggle<T>(Set<T> values, T value) {
+    final nextValues = Set<T>.from(values);
+    if (nextValues.contains(value)) {
+      nextValues.remove(value);
+    } else {
+      nextValues.add(value);
+    }
+    return nextValues;
   }
 }
 
@@ -183,29 +245,43 @@ abstract class TrackerInfosState with _$TrackerInfosState {
     @Default([]) List<TrackerInfo> trackerInfos,
     @Default([]) List<String> keywords,
     @Default('') String query,
+    @Default(false) bool useRegex,
     @Default(true) bool autoScrollToEnd,
   }) = _TrackerInfosState;
 }
 
 extension TrackerInfosStateExt on TrackerInfosState {
   List<TrackerInfo> get list {
-    final lowerQuery = query.toLowerCase().trim();
-    final lowQuery = query.toLowerCase();
+    final matcher = SearchMatcher(query, useRegex: useRegex);
     return trackerInfos.where((trackerInfo) {
       final chains = trackerInfo.chains;
       final process = trackerInfo.metadata.process;
-      final networkText = trackerInfo.metadata.network.toLowerCase();
-      final hostText = trackerInfo.metadata.host.toLowerCase();
-      final destinationIPText = trackerInfo.metadata.destinationIP
-          .toLowerCase();
-      final processText = trackerInfo.metadata.process.toLowerCase();
-      final chainsText = chains.join('').toLowerCase();
+      final metadata = trackerInfo.metadata;
+      final ruleText = [
+        trackerInfo.rule,
+        trackerInfo.rulePayload,
+      ].where((value) => value.isNotEmpty).join(' ');
+      final chainsText = chains.join('');
       return {...chains, process}.containsAll(keywords) &&
-          (networkText.contains(lowerQuery) ||
-              hostText.contains(lowerQuery) ||
-              destinationIPText.contains(lowQuery) ||
-              processText.contains(lowerQuery) ||
-              chainsText.contains(lowerQuery));
+          matcher.hasAnyMatch([
+            metadata.network,
+            metadata.host,
+            metadata.remoteDestination,
+            metadata.sourceIP,
+            metadata.sourcePort,
+            metadata.destinationIP,
+            metadata.destinationPort,
+            metadata.process,
+            metadata.processPath,
+            metadata.sourceGeoIP.join(' '),
+            metadata.destinationGeoIP.join(' '),
+            metadata.sourceIPASN,
+            metadata.destinationIPASN,
+            metadata.specialRules,
+            metadata.specialProxy,
+            ruleText,
+            chainsText,
+          ]);
     }).toList();
   }
 }
@@ -373,6 +449,10 @@ extension TrafficExt on Traffic {
     return '${up.traffic.show} ↑ ${down.traffic.show} ↓';
   }
 
+  String get speedDesc {
+    return '${up.traffic.show}/s ↑ ${down.traffic.show}/s ↓';
+  }
+
   String get trayTitle {
     return '${up.shortTraffic.show}/s\n${down.shortTraffic.show}/s';
   }
@@ -532,7 +612,7 @@ abstract class IpInfo with _$IpInfo {
 @freezed
 abstract class HotKeyAction with _$HotKeyAction {
   const factory HotKeyAction({
-    required HotAction action,
+    @JsonKey(unknownEnumValue: HotAction.start) required HotAction action,
     int? key,
     @Default({}) Set<KeyboardModifier> modifiers,
   }) = _HotKeyAction;
@@ -558,6 +638,8 @@ class PopupMenuItemData {
     required this.label,
     this.onPressed,
     this.danger = false,
+    this.selected = false,
+    this.closeOnPressed = true,
     this.subItems = const [],
   });
 
@@ -565,6 +647,8 @@ class PopupMenuItemData {
   final VoidCallback? onPressed;
   final IconData? icon;
   final bool danger;
+  final bool selected;
+  final bool closeOnPressed;
   final List<PopupMenuItemData> subItems;
 }
 
@@ -572,8 +656,8 @@ class CloseWindowIntent extends Intent {
   const CloseWindowIntent();
 }
 
-class EscapeBackIntent extends Intent {
-  const EscapeBackIntent();
+class BackIntent extends Intent {
+  const BackIntent();
 }
 
 @freezed
@@ -629,10 +713,45 @@ extension ScriptsExt on List<Script> {
   }
 }
 
+Future<String> getScriptRemoteUrlPath(int id) {
+  return appPath.getScriptPath('$id.url.json');
+}
+
 extension ScriptExt on Script {
   String get fileName => '$id.js';
 
   Future<String> get path async => appPath.getScriptPath(id.toString());
+
+  Future<String> get remoteUrlPath async => getScriptRemoteUrlPath(id);
+
+  Future<String?> get remoteUrl async {
+    final file = File(await remoteUrlPath);
+    if (!await file.exists()) {
+      return null;
+    }
+    try {
+      final data = json.decode(await file.readAsString());
+      if (data is Map) {
+        return data['url'] as String?;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> saveRemoteUrl(String url) async {
+    final file = File(await remoteUrlPath);
+    if (!await file.exists()) {
+      await file.create(recursive: true);
+    }
+    await file.writeAsString(json.encode({'url': url}));
+  }
+
+  Future<void> clearRemoteUrl() async {
+    final file = File(await remoteUrlPath);
+    await file.safeDelete();
+  }
+
+  String get updatingKey => 'script_$id';
 
   Future<String?> get content async {
     final file = File(await path);
@@ -700,5 +819,6 @@ abstract class IconButtonData with _$IconButtonData {
   const factory IconButtonData({
     required IconData icon,
     required VoidCallback onPressed,
+    String? tooltip,
   }) = _IconButtonData;
 }

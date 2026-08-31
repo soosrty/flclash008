@@ -25,15 +25,18 @@ _UpdateParams _$UpdateParamsFromJson(Map<String, dynamic> json) =>
       findProcessMode: $enumDecode(
         _$FindProcessModeEnumMap,
         json['find-process-mode'],
+        unknownValue: FindProcessMode.always,
       ),
-      mode: $enumDecode(_$ModeEnumMap, json['mode']),
-      logLevel: $enumDecode(_$LogLevelEnumMap, json['log-level']),
+      mode: $enumDecode(_$ModeEnumMap, json['mode'], unknownValue: Mode.rule),
+      logLevel: $enumDecode(
+        _$LogLevelEnumMap,
+        json['log-level'],
+        unknownValue: LogLevel.error,
+      ),
       ipv6: json['ipv6'] as bool,
       tcpConcurrent: json['tcp-concurrent'] as bool,
-      externalController: $enumDecode(
-        _$ExternalControllerStatusEnumMap,
-        json['external-controller'],
-      ),
+      externalController: json['external-controller'] as String,
+      secret: json['secret'] as String,
       unifiedDelay: json['unified-delay'] as bool,
       geoAutoUpdate: json['geo-auto-update'] as bool? ?? false,
       geoUpdateInterval: (json['geo-update-interval'] as num?)?.toInt() ?? 24,
@@ -49,8 +52,8 @@ Map<String, dynamic> _$UpdateParamsToJson(_UpdateParams instance) =>
       'log-level': _$LogLevelEnumMap[instance.logLevel]!,
       'ipv6': instance.ipv6,
       'tcp-concurrent': instance.tcpConcurrent,
-      'external-controller':
-          _$ExternalControllerStatusEnumMap[instance.externalController]!,
+      'external-controller': instance.externalController,
+      'secret': instance.secret,
       'unified-delay': instance.unifiedDelay,
       'geo-auto-update': instance.geoAutoUpdate,
       'geo-update-interval': instance.geoUpdateInterval,
@@ -75,30 +78,36 @@ const _$LogLevelEnumMap = {
   LogLevel.silent: 'silent',
 };
 
-const _$ExternalControllerStatusEnumMap = {
-  ExternalControllerStatus.close: '',
-  ExternalControllerStatus.open: '127.0.0.1:9090',
-};
-
 _VpnOptions _$VpnOptionsFromJson(Map<String, dynamic> json) => _VpnOptions(
   enable: json['enable'] as bool,
   port: (json['port'] as num).toInt(),
   ipv6: json['ipv6'] as bool,
-  dnsHijacking: json['dnsHijacking'] as bool,
+  captureDns: json['captureDns'] as bool,
   accessControlProps: AccessControlProps.fromJson(
     json['accessControlProps'] as Map<String, dynamic>,
   ),
   allowBypass: json['allowBypass'] as bool,
   systemProxy: json['systemProxy'] as bool,
+  suspendSupport: json['suspendSupport'] as bool,
   bypassDomain: (json['bypassDomain'] as List<dynamic>)
       .map((e) => e as String)
       .toList(),
   stack: json['stack'] as String,
+  mtu: (json['mtu'] as num?)?.toInt() ?? defaultTunMtu,
   routeAddress:
       (json['routeAddress'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList() ??
       const [],
+  disableIcmpForwarding: json['disableIcmpForwarding'] as bool? ?? false,
+  endpointIndependentNat: json['endpointIndependentNat'] as bool? ?? false,
+  includeAllNetworks: json['includeAllNetworks'] as bool? ?? false,
+  excludeLocalNetworks: json['excludeLocalNetworks'] as bool? ?? true,
+  excludeAPNs: json['excludeAPNs'] as bool? ?? true,
+  excludeCellularServices: json['excludeCellularServices'] as bool? ?? true,
+  enforceRoutes: json['enforceRoutes'] as bool? ?? false,
+  excludeDeviceCommunication:
+      json['excludeDeviceCommunication'] as bool? ?? true,
 );
 
 Map<String, dynamic> _$VpnOptionsToJson(_VpnOptions instance) =>
@@ -106,13 +115,23 @@ Map<String, dynamic> _$VpnOptionsToJson(_VpnOptions instance) =>
       'enable': instance.enable,
       'port': instance.port,
       'ipv6': instance.ipv6,
-      'dnsHijacking': instance.dnsHijacking,
+      'captureDns': instance.captureDns,
       'accessControlProps': instance.accessControlProps,
       'allowBypass': instance.allowBypass,
       'systemProxy': instance.systemProxy,
+      'suspendSupport': instance.suspendSupport,
       'bypassDomain': instance.bypassDomain,
       'stack': instance.stack,
+      'mtu': instance.mtu,
       'routeAddress': instance.routeAddress,
+      'disableIcmpForwarding': instance.disableIcmpForwarding,
+      'endpointIndependentNat': instance.endpointIndependentNat,
+      'includeAllNetworks': instance.includeAllNetworks,
+      'excludeLocalNetworks': instance.excludeLocalNetworks,
+      'excludeAPNs': instance.excludeAPNs,
+      'excludeCellularServices': instance.excludeCellularServices,
+      'enforceRoutes': instance.enforceRoutes,
+      'excludeDeviceCommunication': instance.excludeDeviceCommunication,
     };
 
 _InitParams _$InitParamsFromJson(Map<String, dynamic> json) => _InitParams(
@@ -125,6 +144,26 @@ Map<String, dynamic> _$InitParamsToJson(_InitParams instance) =>
       'home-dir': instance.homeDir,
       'version': instance.version,
     };
+
+_DeleteManagedPathParams _$DeleteManagedPathParamsFromJson(
+  Map<String, dynamic> json,
+) => _DeleteManagedPathParams(
+  scope: $enumDecode(_$ManagedPathScopeEnumMap, json['scope']),
+  relativePath: json['relative-path'] as String,
+);
+
+Map<String, dynamic> _$DeleteManagedPathParamsToJson(
+  _DeleteManagedPathParams instance,
+) => <String, dynamic>{
+  'scope': _$ManagedPathScopeEnumMap[instance.scope]!,
+  'relative-path': instance.relativePath,
+};
+
+const _$ManagedPathScopeEnumMap = {
+  ManagedPathScope.profiles: 'profiles',
+  ManagedPathScope.providers: 'providers',
+  ManagedPathScope.scripts: 'scripts',
+};
 
 _ChangeProxyParams _$ChangeProxyParamsFromJson(Map<String, dynamic> json) =>
     _ChangeProxyParams(
@@ -152,7 +191,11 @@ Map<String, dynamic> _$UpdateGeoDataParamsToJson(
 };
 
 _CoreEvent _$CoreEventFromJson(Map<String, dynamic> json) => _CoreEvent(
-  type: $enumDecode(_$CoreEventTypeEnumMap, json['type']),
+  type: $enumDecode(
+    _$CoreEventTypeEnumMap,
+    json['type'],
+    unknownValue: CoreEventType.crash,
+  ),
   data: json['data'],
 );
 
@@ -173,7 +216,11 @@ const _$CoreEventTypeEnumMap = {
 
 _InvokeMessage _$InvokeMessageFromJson(Map<String, dynamic> json) =>
     _InvokeMessage(
-      type: $enumDecode(_$InvokeMessageTypeEnumMap, json['type']),
+      type: $enumDecode(
+        _$InvokeMessageTypeEnumMap,
+        json['type'],
+        unknownValue: InvokeMessageType.process,
+      ),
       data: json['data'],
     );
 
@@ -230,6 +277,7 @@ _ExternalProvider _$ExternalProviderFromJson(Map<String, dynamic> json) =>
     _ExternalProvider(
       name: json['name'] as String,
       type: json['type'] as String,
+      format: json['format'] as String?,
       path: json['path'] as String?,
       count: (json['count'] as num).toInt(),
       subscriptionInfo: subscriptionInfoFormCore(
@@ -243,6 +291,7 @@ Map<String, dynamic> _$ExternalProviderToJson(_ExternalProvider instance) =>
     <String, dynamic>{
       'name': instance.name,
       'type': instance.type,
+      'format': instance.format,
       'path': instance.path,
       'count': instance.count,
       'subscription-info': instance.subscriptionInfo,

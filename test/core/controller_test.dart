@@ -29,7 +29,8 @@ void main() {
         logLevel: LogLevel.info,
         ipv6: false,
         tcpConcurrent: false,
-        externalController: ExternalControllerStatus.close,
+        externalController: '',
+        secret: '',
         unifiedDelay: false,
       ),
     );
@@ -39,6 +40,8 @@ void main() {
     registerFallbackValue(
       const UpdateGeoDataParams(geoType: 't', geoName: 'n'),
     );
+    registerFallbackValue(const GetOverlayNetworkStatusParams(targets: []));
+    registerFallbackValue(OverlayNetworkKind.tailscale);
   });
 
   setUp(() {
@@ -54,6 +57,7 @@ void main() {
   group('CoreController singleton', () {
     test('test constructor injects mock interface', () {
       expect(controller, isA<CoreController>());
+      expect(CoreController(), same(controller));
     });
 
     test('resetInstance allows fresh construction', () {
@@ -101,11 +105,27 @@ void main() {
   });
 
   group('config methods', () {
-    test('validateConfig delegates to interface', () async {
-      when(() => mock.validateConfig('/path')).thenAnswer((_) async => 'ok');
-      final result = await controller.validateConfig('/path');
+    test('validateConfig delegates config data to interface', () async {
+      const data = 'mode: rule';
+      when(() => mock.validateConfig(data)).thenAnswer((_) async => 'ok');
+      final result = await controller.validateConfig(data);
       expect(result, 'ok');
-      verify(() => mock.validateConfig('/path')).called(1);
+      verify(() => mock.validateConfig(data)).called(1);
+    });
+
+    test('getConfig delegates profile id and normalizes rules', () async {
+      when(() => mock.getProfileConfig(7)).thenAnswer(
+        (_) async => {
+          'mode': 'rule',
+          'rule': ['MATCH,DIRECT'],
+        },
+      );
+
+      final result = await controller.getConfig(7);
+
+      expect(result['rules'], ['MATCH,DIRECT']);
+      expect(result, isNot(contains('rule')));
+      verify(() => mock.getProfileConfig(7)).called(1);
     });
 
     test('updateConfig delegates to interface', () async {
@@ -118,7 +138,8 @@ void main() {
         logLevel: LogLevel.info,
         ipv6: false,
         tcpConcurrent: false,
-        externalController: ExternalControllerStatus.close,
+        externalController: '',
+        secret: '',
         unifiedDelay: false,
       );
       when(() => mock.updateConfig(params)).thenAnswer((_) async => 'ok');
@@ -157,9 +178,15 @@ void main() {
   group('proxy methods', () {
     test('changeProxy delegates to interface', () async {
       const params = ChangeProxyParams(groupName: 'G1', proxyName: 'P1');
-      when(() => mock.changeProxy(params)).thenAnswer((_) async => 'ok');
-      final result = await controller.changeProxy(params);
+      when(
+        () => mock.changeProxy(params, closeConnections: true),
+      ).thenAnswer((_) async => 'ok');
+      final result = await controller.changeProxy(
+        params,
+        closeConnections: true,
+      );
       expect(result, 'ok');
+      verify(() => mock.changeProxy(params, closeConnections: true)).called(1);
     });
   });
 
@@ -222,6 +249,83 @@ void main() {
       final result = await controller.getExternalProvider('test');
       expect(result, isNull);
     });
+
+    test('getOverlayNetworkStatus delegates structured batch', () async {
+      const status = OverlayNetworkStatus(
+        name: 'tailnet',
+        kind: OverlayNetworkKind.tailscale,
+        state: OverlayNetworkState.connected,
+        rawState: 'Running',
+        networkName: 'example.com',
+        authUrl: '',
+        error: '',
+      );
+      when(
+        () => mock.getOverlayNetworkStatus(any()),
+      ).thenAnswer((_) async => [status]);
+      const params = GetOverlayNetworkStatusParams(
+        targets: [
+          OverlayNetworkTarget(
+            name: 'tailnet',
+            kind: OverlayNetworkKind.tailscale,
+            level: OverlayNetworkDetailLevel.summary,
+          ),
+        ],
+      );
+
+      expect(await controller.getOverlayNetworkStatus(params), [status]);
+      verify(() => mock.getOverlayNetworkStatus(params)).called(1);
+    });
+
+    test('activateOverlayNetwork delegates target identity', () async {
+      const status = OverlayNetworkStatus(
+        name: 'tailnet',
+        kind: OverlayNetworkKind.tailscale,
+        state: OverlayNetworkState.connected,
+        rawState: 'Running',
+        networkName: 'example.com',
+        authUrl: '',
+        error: '',
+      );
+      when(
+        () => mock.activateOverlayNetwork(any(), any()),
+      ).thenAnswer((_) async => status);
+
+      expect(
+        await controller.activateOverlayNetwork(
+          'tailnet',
+          OverlayNetworkKind.tailscale,
+        ),
+        status,
+      );
+      verify(
+        () => mock.activateOverlayNetwork(
+          'tailnet',
+          OverlayNetworkKind.tailscale,
+        ),
+      ).called(1);
+    });
+
+    test('pingTailscaleNode delegates target and address', () async {
+      when(
+        () => mock.pingTailscaleNode(any(), any()),
+      ).thenAnswer((_) async => const TailscalePingResult(latencyMs: 23));
+
+      final result = await controller.pingTailscaleNode(
+        'tailnet',
+        '100.64.0.1',
+      );
+
+      expect(result.latencyMs, 23);
+      verify(() => mock.pingTailscaleNode('tailnet', '100.64.0.1')).called(1);
+    });
+
+    test('logoutTailscale delegates target name', () async {
+      when(() => mock.logoutTailscale(any())).thenAnswer((_) async => true);
+
+      expect(await controller.logoutTailscale('tailnet'), isTrue);
+      verify(() => mock.logoutTailscale('tailnet')).called(1);
+    });
   });
 
   group('traffic methods', () {
@@ -247,6 +351,12 @@ void main() {
       when(() => mock.getMemory()).thenAnswer((_) async => 2048);
       final result = await controller.getMemory();
       expect(result, 2048);
+    });
+
+    test('getGoroutineCount delegates numeric count', () async {
+      when(() => mock.getGoroutineCount()).thenAnswer((_) async => 42);
+      final result = await controller.getGoroutineCount();
+      expect(result, 42);
     });
   });
 
@@ -294,6 +404,20 @@ void main() {
       when(() => mock.clearEffect(42)).thenAnswer((_) async => 'ok');
       final result = await controller.clearEffect(42);
       expect(result, 'ok');
+      verify(() => mock.clearEffect(42)).called(1);
+    });
+
+    test('deleteManagedPath delegates scoped relative path', () async {
+      const params = DeleteManagedPathParams(
+        scope: ManagedPathScope.providers,
+        relativePath: '7',
+      );
+      when(() => mock.deleteManagedPath(params)).thenAnswer((_) async => 'ok');
+
+      final result = await controller.deleteManagedPath(params);
+
+      expect(result, 'ok');
+      verify(() => mock.deleteManagedPath(params)).called(1);
     });
   });
 }

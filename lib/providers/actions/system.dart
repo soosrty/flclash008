@@ -28,6 +28,15 @@ class SystemAction extends _$SystemAction {
     return coordinator.exit(cleanup: () => cleanupExitResources(needSave));
   }
 
+  Future<void> handleReset(ExitStep clearData) async {
+    await closeCore();
+    try {
+      await clearData();
+    } finally {
+      await handleExit();
+    }
+  }
+
   @protected
   Duration get exitWatchdogDuration => const Duration(seconds: 3);
 
@@ -92,18 +101,24 @@ class SystemAction extends _$SystemAction {
   void updateAutoLaunch() {
     ref
         .read(appSettingProvider.notifier)
-        .update((state) => state.copyWith(autoLaunch: !state.autoLaunch));
+        .update(
+          (state) => state.copyWith(
+            autoLaunch: !state.autoLaunch,
+            highPriorityAutoLaunch: false,
+          ),
+        );
   }
 
   Future<void> updateTray() async {
-    tray?.update(
-      trayState: ref.read(trayStateProvider),
-      traffic: ref.read(
-        trafficsProvider.select(
-          (state) => state.list.safeLast(const Traffic()),
-        ),
-      ),
-    );
+    final currentTray = tray;
+    if (currentTray == null) {
+      return;
+    }
+    try {
+      await currentTray.update(trayState: ref.read(trayStateProvider));
+    } catch (e) {
+      commonPrint.log('update tray error: $e', logLevel: LogLevel.error);
+    }
   }
 
   Future<void> updateLocalIp() async {

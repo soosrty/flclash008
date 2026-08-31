@@ -74,6 +74,7 @@ func toExternalProvider(p cp.Provider) (*ExternalProvider, error) {
 		return &ExternalProvider{
 			Name:        rsp.Name(),
 			Type:        rsp.Type().String(),
+			Format:      rsp.Format().String(),
 			VehicleType: rsp.VehicleType().String(),
 			Count:       rsp.Count(),
 			UpdateAt:    rsp.UpdatedAt(),
@@ -132,7 +133,7 @@ func updateListeners() {
 	listener.ReCreateShadowSocks(general.ShadowSocksConfig, tunnel.Tunnel)
 	listener.ReCreateVmess(general.VmessConfig, tunnel.Tunnel)
 	listener.ReCreateTuic(general.TuicServer, tunnel.Tunnel)
-	if !features.Android {
+	if !features.Android && !features.IOS {
 		listener.ReCreateTun(general.Tun, tunnel.Tunnel)
 	}
 }
@@ -169,21 +170,12 @@ func defaultSetupParams() *SetupParams {
 	}
 }
 
-func readFile(path string) ([]byte, error) {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return nil, err
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	return data, err
-}
-
 func updateConfig(params *UpdateParams) {
 	runLock.Lock()
 	defer runLock.Unlock()
+	if currentConfig == nil || currentConfig.General == nil {
+		return
+	}
 	general := currentConfig.General
 	if params.MixedPort != nil {
 		general.MixedPort = *params.MixedPort
@@ -238,6 +230,15 @@ func updateConfig(params *UpdateParams) {
 		if params.Tun.RouteAddress != nil {
 			general.Tun.RouteAddress = *params.Tun.RouteAddress
 		}
+		if params.Tun.StrictRoute != nil {
+			general.Tun.StrictRoute = *params.Tun.StrictRoute
+		}
+		if params.Tun.DisableICMPForwarding != nil {
+			general.Tun.DisableICMPForwarding = *params.Tun.DisableICMPForwarding
+		}
+		if params.Tun.EndpointIndependentNAT != nil {
+			general.Tun.EndpointIndependentNat = *params.Tun.EndpointIndependentNAT
+		}
 		if params.Tun.DNSHijack != nil {
 			general.Tun.DNSHijack = *params.Tun.DNSHijack
 		}
@@ -254,8 +255,10 @@ func updateConfig(params *UpdateParams) {
 	}
 
 	updateListeners()
-	if updater.GeoAutoUpdate() {
-		updater.RegisterGeoUpdaterWithCancel()
+	if features.WithLowMemory {
+		updater.StopGeoUpdater()
+	} else {
+		updater.RegisterGeoUpdater()
 	}
 }
 
@@ -272,8 +275,10 @@ func applyConfig(params *SetupParams) error {
 	hub.ApplyConfig(currentConfig)
 	patchSelectGroup(params.SelectedMap)
 	updateListeners()
-	if updater.GeoAutoUpdate() {
-		updater.RegisterGeoUpdaterWithCancel()
+	if features.WithLowMemory {
+		updater.StopGeoUpdater()
+	} else {
+		updater.RegisterGeoUpdater()
 	}
 	return err
 }

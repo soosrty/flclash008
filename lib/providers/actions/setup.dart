@@ -11,7 +11,8 @@ class _RunRequest {
 
 @Riverpod(keepAlive: true)
 class SetupAction extends _$SetupAction {
-  Timer? _runtimeTimer;
+  static const _updateTickerTag = 'SetupAction.update';
+
   final _setupScheduler = SerialTaskScheduler();
   final _listenerScheduler = SerialTaskScheduler();
   _RunRequest? _latestRunRequest;
@@ -39,8 +40,7 @@ class SetupAction extends _$SetupAction {
   }
 
   void _setLocalRunning(bool running) {
-    _runtimeTimer?.cancel();
-    _runtimeTimer = null;
+    foregroundTicker.unregister(_updateTickerTag);
     if (!running) {
       _startTime = null;
       debouncer.cancel(FunctionTag.applyProfile);
@@ -50,10 +50,7 @@ class SetupAction extends _$SetupAction {
 
     _startTime ??= DateTime.now();
     _refreshRunningState();
-    _runtimeTimer = Timer.periodic(
-      const Duration(seconds: 1),
-      (_) => _refreshRunningState(),
-    );
+    foregroundTicker.register(_updateTickerTag, _refreshRunningState);
   }
 
   void _refreshRunningState() {
@@ -79,7 +76,7 @@ class SetupAction extends _$SetupAction {
       return;
     }
     commonPrint.log('init status');
-    if (system.isAndroid) {
+    if (system.isMobile) {
       await _updateStartTime();
     }
     final shouldRun = _isRunning || ref.read(appSettingProvider).autoRun;
@@ -329,7 +326,7 @@ class SetupAction extends _$SetupAction {
       );
       return res.a;
     } catch (e) {
-      globalState.showNotifier(e.toString());
+      globalState.showNotifier(e.toString(), allowCopy: true);
     }
     return '';
   }
@@ -406,7 +403,7 @@ class SetupAction extends _$SetupAction {
       return _SetupTaskResult.completed;
     }
     if (system.isAndroid) {
-      globalState.lastVpnState = ref.read(vpnStateProvider);
+      globalState.lastVpnOptions = ref.read(vpnOptionsProvider);
       final sharedState = ref.read(sharedStateProvider);
       await preferences.saveShareState(sharedState);
     }

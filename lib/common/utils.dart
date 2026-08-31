@@ -76,29 +76,25 @@ class Utils {
   }
 
   String getTimeDifference(DateTime dateTime) {
-    final currentDateTime = DateTime.now();
-    final difference = currentDateTime.difference(dateTime);
-    final inHours = difference.inHours;
-    final inMinutes = difference.inMinutes;
-    final inSeconds = difference.inSeconds;
-
-    return '${getDateStringLast2(inHours)}:${getDateStringLast2(inMinutes)}:${getDateStringLast2(inSeconds)}';
+    final difference = DateTime.now().difference(dateTime);
+    return getTimeText(difference.inMilliseconds);
   }
 
   String getTimeText(int? timeStamp) {
     if (timeStamp == null) {
       return '00:00:00';
     }
-    final diff = timeStamp / 1000;
-    final inHours = (diff / 3600).floor();
-    if (inHours > 999) {
-      return '999:59:59';
-    }
-    final inMinutes = (diff / 60 % 60).floor();
-    final inSeconds = (diff % 60).floor();
-    final hoursText = inHours.toString().padLeft(2, '0');
+    final totalSeconds = (timeStamp / 1000).floor();
+    final inHours = (totalSeconds / Duration.secondsPerHour).floor();
+    final inMinutes = (totalSeconds / Duration.secondsPerMinute).floor() % 60;
+    final inSeconds = totalSeconds % 60;
 
-    return '$hoursText:${getDateStringLast2(inMinutes)}:${getDateStringLast2(inSeconds)}';
+    if (inHours >= 24) {
+      final inDays = (inHours / 24).floor();
+      final remainHours = inHours % 24;
+      return '${inDays}d ${getDateStringLast2(remainHours)}:${getDateStringLast2(inMinutes)}:${getDateStringLast2(inSeconds)}';
+    }
+    return '${getDateStringLast2(inHours)}:${getDateStringLast2(inMinutes)}:${getDateStringLast2(inSeconds)}';
   }
 
   Locale? getLocaleForString(String? localString) {
@@ -206,17 +202,44 @@ class Utils {
     return parameters[fileNameKey];
   }
 
+  String? getFileNameFromUrl(String? url) {
+    final realUrl = url?.trim();
+    if (realUrl == null || realUrl.isEmpty) return null;
+    final uri = Uri.tryParse(realUrl);
+    if (uri == null || uri.pathSegments.isEmpty) return null;
+    final fileName = uri.pathSegments
+        .lastWhere((segment) => segment.trim().isNotEmpty, orElse: () => '')
+        .trim();
+    if (fileName.isEmpty || fileName.contains('/') || fileName.contains(r'\')) {
+      return null;
+    }
+    final dotIndex = fileName.lastIndexOf('.');
+    if (dotIndex <= 0 || dotIndex == fileName.length - 1) {
+      return null;
+    }
+    return fileName;
+  }
+
   FlutterView getScreen() {
     return WidgetsBinding.instance.platformDispatcher.views.first;
   }
 
   List<String> parseReleaseBody(String? body) {
     if (body == null) return [];
-    const pattern = r'- \s*(.*)';
-    final regex = RegExp(pattern);
-    return regex
-        .allMatches(body)
-        .map((match) => match.group(1) ?? '')
+    final lines = body.split(RegExp(r'\r?\n'));
+    final whatsChangedIndex = lines.indexWhere(
+      (line) => line.trim() == '## What\'s Changed',
+    );
+    final relevantLines = whatsChangedIndex == -1
+        ? lines
+        : lines
+              .skip(whatsChangedIndex + 1)
+              .takeWhile(
+                (line) => !RegExp(r'^##\s+').hasMatch(line.trimLeft()),
+              );
+    final bulletPattern = RegExp(r'^\s*-\s+(.*)$');
+    return relevantLines
+        .map((line) => bulletPattern.firstMatch(line)?.group(1) ?? '')
         .where((item) => item.isNotEmpty)
         .toList();
   }
@@ -293,29 +316,32 @@ class Utils {
     return '${appName}_${DateTime.now().show}.log';
   }
 
-  Future<String?> getLocalIpAddress() async {
+  Future<List<NetworkInterface>> getLocalNetworkInterfaces() async {
     final List<NetworkInterface> interfaces =
         await NetworkInterface.list(includeLoopback: false)
           ..sort((a, b) {
-            if (a.isWifi && !b.isWifi) return -1;
-            if (!a.isWifi && b.isWifi) return 1;
+            final typeCompare = a.interfaceType.index.compareTo(
+              b.interfaceType.index,
+            );
+            if (typeCompare != 0) return typeCompare;
             if (a.includesIPv4 && !b.includesIPv4) return -1;
             if (!a.includesIPv4 && b.includesIPv4) return 1;
             return 0;
           });
-    for (final interface in interfaces) {
-      final addresses = interface.addresses;
-      if (addresses.isEmpty) {
-        continue;
-      }
-      addresses.sort((a, b) {
-        if (a.isIPv4 && !b.isIPv4) return -1;
-        if (!a.isIPv4 && b.isIPv4) return 1;
-        return 0;
-      });
-      return addresses.first.address;
-    }
-    return '';
+    final sortedInterfaceNames = interfaces
+        .map((e) => '${e.name}(${e.interfaceType.name})')
+        .join(', ');
+    commonPrint.log('sorted network interfaces: $sortedInterfaceNames');
+    return interfaces
+        .where((interface) => interface.preferredAddress != null)
+        .toList();
+  }
+
+  Future<String?> getLocalIpAddress() async {
+    final interfaces = await getLocalNetworkInterfaces();
+    return interfaces.isNotEmpty
+        ? interfaces.first.preferredAddress?.address ?? ''
+        : '';
   }
 
   SingleActivator controlSingleActivator(LogicalKeyboardKey trigger) {

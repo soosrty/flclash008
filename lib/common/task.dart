@@ -112,7 +112,8 @@ Future<VM2<String, String>> _makeRealProfileTask(
     );
   }
 
-  rawConfig['external-controller'] = realPatchConfig.externalController.value;
+  rawConfig['external-controller'] = realPatchConfig.externalController;
+  rawConfig['secret'] = realPatchConfig.secret;
   rawConfig['external-ui'] = '';
   rawConfig['interface-name'] = '';
   rawConfig['external-ui-url'] = '';
@@ -136,11 +137,22 @@ Future<VM2<String, String>> _makeRealProfileTask(
   }
   rawConfig['tun']['enable'] = realPatchConfig.tun.enable;
   rawConfig['tun']['device'] = realPatchConfig.tun.device;
+  rawConfig['tun']['mtu'] = realPatchConfig.tun.mtu;
   rawConfig['tun']['dns-hijack'] = realPatchConfig.tun.dnsHijack;
   rawConfig['tun']['stack'] = realPatchConfig.tun.stack.name;
   rawConfig['tun']['route-address'] = realPatchConfig.tun.routeAddress;
   rawConfig['tun']['auto-route'] = realPatchConfig.tun.autoRoute;
+  rawConfig['tun']['strict-route'] = realPatchConfig.tun.strictRoute;
+  rawConfig['tun']['disable-icmp-forwarding'] =
+      realPatchConfig.tun.disableIcmpForwarding;
+  rawConfig['tun']['endpoint-independent-nat'] =
+      realPatchConfig.tun.endpointIndependentNat;
   rawConfig['geodata-loader'] = realPatchConfig.geodataLoader.name;
+  if (system.isIOS) {
+    rawConfig['geosite-matcher'] = GeositeMatcher.succinct.name;
+  } else {
+    rawConfig['geosite-matcher'] = realPatchConfig.geositeMatcher.name;
+  }
   if (rawConfig['sniffer']?['sniff'] != null) {
     for (final value in (rawConfig['sniffer']?['sniff'] as Map).values) {
       if (value['ports'] != null && value['ports'] is List) {
@@ -184,6 +196,8 @@ Future<VM2<String, String>> _makeRealProfileTask(
   }
   rawConfig['profile']['store-selected'] = false;
   rawConfig['geox-url'] = realPatchConfig.geoXUrl.raw;
+  rawConfig['geo-auto-update'] = realPatchConfig.geoAutoUpdate;
+  rawConfig['geo-update-interval'] = realPatchConfig.geoUpdateInterval;
   rawConfig['global-ua'] = realPatchConfig.globalUa ?? defaultUA;
   if (rawConfig['hosts'] == null) {
     rawConfig['hosts'] = {};
@@ -207,6 +221,11 @@ Future<VM2<String, String>> _makeRealProfileTask(
     rawConfig['dns']['nameserver-policy'] = {};
     for (final entry in dns.nameserverPolicy.entries) {
       rawConfig['dns']['nameserver-policy'][entry.key] =
+          entry.value.splitByMultipleSeparators;
+    }
+    rawConfig['dns']['proxy-server-nameserver-policy'] = {};
+    for (final entry in dns.proxyServerNameserverPolicy.entries) {
+      rawConfig['dns']['proxy-server-nameserver-policy'][entry.key] =
           entry.value.splitByMultipleSeparators;
     }
   }
@@ -271,16 +290,16 @@ Future<VM2<String, String>> _makeRealProfileTask(
   return VM2(yaml, yaml.toMd5());
 }
 
-Future<List<String>> shakingProfileTask(
+Future<List<DeleteManagedPathParams>> shakingProfileTask(
   VM2<Iterable<int>, Iterable<int>> data,
 ) async {
   return compute<
     VM3<Iterable<int>, Iterable<int>, RootIsolateToken>,
-    List<String>
+    List<DeleteManagedPathParams>
   >(_shakingProfileTask, VM3(data.a, data.b, RootIsolateToken.instance!));
 }
 
-Future<List<String>> _shakingProfileTask(
+Future<List<DeleteManagedPathParams>> _shakingProfileTask(
   VM3<Iterable<int>, Iterable<int>, RootIsolateToken> data,
 ) async {
   final profileIds = data.a;
@@ -290,10 +309,11 @@ Future<List<String>> _shakingProfileTask(
   final profilesDir = Directory(await appPath.profilesPath);
   final scriptsDir = Directory(await appPath.scriptsDirPath);
   final providersDir = Directory(await appPath.getProvidersRootPath());
-  final List<String> targets = [];
+  final List<DeleteManagedPathParams> targets = [];
   void scanDirectory(
     Directory dir,
     Iterable<int> baseNames, {
+    required ManagedPathScope scope,
     bool skipProvidersFolder = false,
   }) {
     if (!dir.existsSync()) return;
@@ -303,7 +323,12 @@ Future<List<String>> _shakingProfileTask(
       if (entity is File) {
         final id = basenameWithoutExtension(entity.path);
         if (!baseNames.contains(int.tryParse(id))) {
-          targets.add(entity.path);
+          targets.add(
+            DeleteManagedPathParams(
+              scope: scope,
+              relativePath: relative(entity.path, from: dir.path),
+            ),
+          );
         }
       } else if (skipProvidersFolder && entity is Directory) {
         if (basename(entity.path) == 'providers') {
@@ -313,9 +338,14 @@ Future<List<String>> _shakingProfileTask(
     }
   }
 
-  scanDirectory(profilesDir, profileIds, skipProvidersFolder: true);
-  scanDirectory(providersDir, profileIds);
-  scanDirectory(scriptsDir, scriptIds);
+  scanDirectory(
+    profilesDir,
+    profileIds,
+    scope: ManagedPathScope.profiles,
+    skipProvidersFolder: true,
+  );
+  scanDirectory(providersDir, profileIds, scope: ManagedPathScope.providers);
+  scanDirectory(scriptsDir, scriptIds, scope: ManagedPathScope.scripts);
   return targets;
 }
 
@@ -545,7 +575,16 @@ Future<MigrationData> _restoreTask(RootIsolateToken token) async {
   final dir = Directory(restoreDirPath);
   await dir.create(recursive: true);
   for (final file in archive.files) {
-    final outPath = join(restoreDirPath, posix.normalize(file.name));
+    final outPath = canonicalize(join(restoreDirPath, file.name));
+    final canonicalRestoreDir = canonicalize(restoreDirPath);
+    if (!outPath.startsWith('$canonicalRestoreDir${Platform.pathSeparator}') &&
+        outPath != canonicalRestoreDir) {
+      throw 'Invalid zip entry: path traversal detected in "${file.name}"';
+    }
+    final parent = Directory(dirname(outPath));
+    if (!await parent.exists()) {
+      await parent.create(recursive: true);
+    }
     final outputStream = OutputFileStream(outPath);
     file.writeContent(outputStream);
     await outputStream.close();

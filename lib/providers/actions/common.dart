@@ -12,12 +12,6 @@ class CommonAction extends _$CommonAction {
         .setRunning(running, initialize: running && !ref.read(initProvider));
   }
 
-  void updateSpeedStatistics() {
-    ref
-        .read(appSettingProvider.notifier)
-        .update((state) => state.copyWith(showTrayTitle: !state.showTrayTitle));
-  }
-
   void updateMode() {
     ref.read(patchClashConfigProvider.notifier).update((state) {
       final index = Mode.values.indexWhere((item) => item == state.mode);
@@ -46,8 +40,15 @@ class CommonAction extends _$CommonAction {
 
   Future<void> autoCheckUpdate() async {
     if (!ref.read(appSettingProvider).autoCheckUpdate) return;
-    final res = await request.checkForUpdate();
-    checkUpdateResultHandle(data: res);
+    try {
+      final data = await request.checkForUpdate();
+      await checkUpdateResultHandle(data: data);
+    } catch (e, s) {
+      commonPrint.log(
+        'autoCheckUpdate failed: $e\n$s',
+        logLevel: LogLevel.warning,
+      );
+    }
   }
 
   Future<void> checkUpdateResultHandle({
@@ -68,7 +69,7 @@ class CommonAction extends _$CommonAction {
           children: [
             TextSpan(text: '\n', style: textTheme.bodyMedium),
             for (final submit in submits)
-              TextSpan(text: '- $submit \n', style: textTheme.bodyMedium),
+              TextSpan(text: '• $submit \n', style: textTheme.bodyMedium),
           ],
         ),
         confirmText: currentAppLocalizations.goDownload,
@@ -82,7 +83,7 @@ class CommonAction extends _$CommonAction {
             .update((state) => state.copyWith(autoCheckUpdate: false));
       }
     } else if (isUser) {
-      globalState.showMessage(
+      await globalState.showMessage(
         title: currentAppLocalizations.checkUpdate,
         message: TextSpan(text: currentAppLocalizations.checkUpdateError),
       );

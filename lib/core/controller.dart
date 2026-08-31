@@ -15,15 +15,17 @@ class CoreController {
   late CoreHandlerInterface _interface;
 
   CoreController._internal() {
-    if (system.isAndroid) {
+    if (system.isAndroid || system.isIOS) {
       _interface = coreLib!;
-    } else {
+    } else if (system.isDesktop) {
       _interface = coreService!;
     }
   }
 
   @visibleForTesting
-  CoreController.test(this._interface);
+  CoreController.test(this._interface) {
+    _instance = this;
+  }
 
   @visibleForTesting
   static void resetInstance() {
@@ -50,7 +52,7 @@ class CoreController {
     if (!isExists) {
       await homeDir.create(recursive: true);
     }
-    const geoFileNameList = [MMDB, GEOIP, GEOSITE, ASN];
+    const geoFileNameList = [MMDB, GEOIP, GEOSITE, ASN, BUNDLE_MRS];
     try {
       for (final geoFileName in geoFileNameList) {
         final geoFile = File(join(homePath, geoFileName));
@@ -67,7 +69,6 @@ class CoreController {
         'Failed to initialize geo data: $e',
         logLevel: LogLevel.error,
       );
-      rethrow;
     }
   }
 
@@ -79,17 +80,13 @@ class CoreController {
 
   FutureOr<bool> get isInit => _interface.isInit;
 
-  Future<String> validateConfig(String path) async {
-    final res = await _interface.validateConfig(path);
+  Future<String> decryptAgeConfig(String data, String ageSecretKey) async {
+    final res = _interface.decryptAgeConfig(data, ageSecretKey);
     return res;
   }
 
-  Future<String> validateConfigWithData(String data) async {
-    final path = await appPath.tempFilePath;
-    final file = File(path);
-    await file.safeWriteAsString(data);
-    final res = await _interface.validateConfig(path);
-    await File(path).safeDelete();
+  Future<String> validateConfig(String data) async {
+    final res = await _interface.validateConfig(data);
     return res;
   }
 
@@ -129,8 +126,14 @@ class CoreController {
     );
   }
 
-  FutureOr<String> changeProxy(ChangeProxyParams changeProxyParams) async {
-    return await _interface.changeProxy(changeProxyParams);
+  FutureOr<String> changeProxy(
+    ChangeProxyParams changeProxyParams, {
+    bool closeConnections = false,
+  }) async {
+    return await _interface.changeProxy(
+      changeProxyParams,
+      closeConnections: closeConnections,
+    );
   }
 
   Future<List<TrackerInfo>> getConnections() async {
@@ -157,6 +160,27 @@ class CoreController {
     String externalProviderName,
   ) async {
     return _interface.getExternalProvider(externalProviderName);
+  }
+
+  Future<List<OverlayNetworkStatus>> getOverlayNetworkStatus(
+    GetOverlayNetworkStatusParams params,
+  ) async {
+    return _interface.getOverlayNetworkStatus(params);
+  }
+
+  Future<OverlayNetworkStatus> activateOverlayNetwork(
+    String name,
+    OverlayNetworkKind kind,
+  ) {
+    return _interface.activateOverlayNetwork(name, kind);
+  }
+
+  Future<TailscalePingResult> pingTailscaleNode(String name, String ip) {
+    return _interface.pingTailscaleNode(name, ip);
+  }
+
+  Future<bool> logoutTailscale(String name) {
+    return _interface.logoutTailscale(name);
   }
 
   Future<String> updateGeoData(String type) {
@@ -190,9 +214,8 @@ class CoreController {
   }
 
   Future<Map<String, dynamic>> getConfig(int id) async {
-    final profilePath = await appPath.getProfilePath(id.toString());
     final data = Map<String, dynamic>.from(
-      await _interface.getConfig(profilePath),
+      await _interface.getProfileConfig(id),
     );
     data['rules'] = data['rule'];
     data.remove('rule');
@@ -219,16 +242,28 @@ class CoreController {
     return _interface.getMemory();
   }
 
+  Future<int> getGoroutineCount() async {
+    return _interface.getGoroutineCount();
+  }
+
   void resetTraffic() {
     _interface.resetTraffic();
   }
 
-  void startLog() {
-    _interface.startLog();
+  Future<List<Log>> startLogNotify() async {
+    return _interface.startLogNotify();
   }
 
-  void stopLog() {
-    _interface.stopLog();
+  void stopLogNotify() {
+    _interface.stopLogNotify();
+  }
+
+  Future<List<TrackerInfo>> startRequestNotify() async {
+    return _interface.startRequestNotify();
+  }
+
+  void stopRequestNotify() {
+    _interface.stopRequestNotify();
   }
 
   Future<void> requestGc() async {
@@ -242,6 +277,18 @@ class CoreController {
   Future<String> clearEffect(int profileId) async {
     return _interface.clearEffect(profileId);
   }
+
+  Future<String> deleteManagedPath(DeleteManagedPathParams params) async {
+    return _interface.deleteManagedPath(params);
+  }
+
+  Future<Map<String, String>> generateAgeKeyPair() {
+    return _interface.generateAgeKeyPair();
+  }
+
+  Future<String> convertAgeSecretKeyToPublicKey(String secretKey) {
+    return _interface.convertAgeSecretKeyToPublicKey(secretKey);
+  }
 }
 
-final coreController = CoreController();
+CoreController get coreController => CoreController();

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/core/core.dart';
 import 'package:fl_clash/enum/enum.dart';
@@ -46,16 +44,20 @@ class _CoreContainerState extends ConsumerState<CoreManager>
         ref.read(setupActionProvider.notifier).updateConfigDebounce();
       }
     });
-    ref.listenManual(appSettingProvider.select((state) => state.openLogs), (
-      prev,
-      next,
-    ) {
-      if (next) {
-        widget.controller.startLog();
-      } else {
-        widget.controller.stopLog();
+    ref.listenManual(patchClashConfigProvider, (prev, next) {
+      if (prev == null) {
+        return;
       }
-    }, fireImmediately: true);
+      final isEquality = stringAndStringMapEquality.equals(
+        prev.geoXUrl.raw,
+        next.geoXUrl.raw,
+      );
+      if (!isEquality) {
+        ref
+            .read(setupActionProvider.notifier)
+            .applyProfileDebounce(silence: true);
+      }
+    });
   }
 
   @override
@@ -76,9 +78,10 @@ class _CoreContainerState extends ConsumerState<CoreManager>
 
   @override
   void onLog(Log log) {
-    ref.read(logsProvider.notifier).add(log);
+    final coreLog = log.copyWith(source: LogSource.core);
+    ref.read(logsProvider.notifier).add(coreLog);
     if (log.logLevel == LogLevel.error) {
-      globalState.showNotifier(log.payload);
+      globalState.showNotifier(log.payload, allowCopy: true);
     }
     super.onLog(log);
   }
@@ -108,7 +111,7 @@ class _CoreContainerState extends ConsumerState<CoreManager>
     }
     ref.read(coreStatusProvider.notifier).value = CoreStatus.disconnected;
     if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
-      context.showNotifier(message);
+      context.showNotifier(message, allowCopy: true);
     }
     super.onCrash(message);
   }
@@ -127,7 +130,7 @@ class _CoreContainerState extends ConsumerState<CoreManager>
     }
     ref.read(isUpdatingProvider(key).notifier).value = updating;
     if (!updating && error != null && error.isNotEmpty) {
-      globalState.showNotifier(error);
+      globalState.showNotifier(error, allowCopy: true);
     }
     super.onGeoUpdate(geoType, updating, skipped, error);
   }

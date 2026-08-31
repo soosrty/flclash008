@@ -30,7 +30,11 @@ _Metadata _$MetadataFromJson(Map<String, dynamic> json) => _Metadata(
   destinationIP: json['destinationIP'] as String? ?? '',
   destinationPort: json['destinationPort'] as String? ?? '',
   host: json['host'] as String? ?? '',
-  dnsMode: $enumDecodeNullable(_$DnsModeEnumMap, json['dnsMode']),
+  dnsMode: $enumDecodeNullable(
+    _$DnsModeEnumMap,
+    json['dnsMode'],
+    unknownValue: JsonKey.nullForUndefinedEnumValue,
+  ),
   process: json['process'] as String? ?? '',
   processPath: json['processPath'] as String? ?? '',
   remoteDestination: json['remoteDestination'] as String? ?? '',
@@ -106,15 +110,28 @@ Map<String, dynamic> _$TrackerInfoToJson(_TrackerInfo instance) =>
 
 _Log _$LogFromJson(Map<String, dynamic> json) => _Log(
   logLevel:
-      $enumDecodeNullable(_$LogLevelEnumMap, json['LogLevel']) ?? LogLevel.info,
+      $enumDecodeNullable(
+        _$LogLevelEnumMap,
+        json['LogLevel'],
+        unknownValue: LogLevel.info,
+      ) ??
+      LogLevel.info,
+  source:
+      $enumDecodeNullable(
+        _$LogSourceEnumMap,
+        json['source'],
+        unknownValue: LogSource.app,
+      ) ??
+      LogSource.app,
   payload: json['Payload'] as String? ?? '',
-  dateTime: _logDateTime(json['dateTime']),
+  timestamp: _logTimestamp(json['Time']),
 );
 
 Map<String, dynamic> _$LogToJson(_Log instance) => <String, dynamic>{
   'LogLevel': _$LogLevelEnumMap[instance.logLevel]!,
+  'source': _$LogSourceEnumMap[instance.source]!,
   'Payload': instance.payload,
-  'dateTime': instance.dateTime,
+  'Time': instance.timestamp,
 };
 
 const _$LogLevelEnumMap = {
@@ -124,6 +141,8 @@ const _$LogLevelEnumMap = {
   LogLevel.error: 'error',
   LogLevel.silent: 'silent',
 };
+
+const _$LogSourceEnumMap = {LogSource.app: 'app', LogSource.core: 'core'};
 
 _DAVProps _$DAVPropsFromJson(Map<String, dynamic> json) => _DAVProps(
   uri: json['uri'] as String,
@@ -194,7 +213,11 @@ const _$GroupTypeEnumMap = {
 
 _HotKeyAction _$HotKeyActionFromJson(Map<String, dynamic> json) =>
     _HotKeyAction(
-      action: $enumDecode(_$HotActionEnumMap, json['action']),
+      action: $enumDecode(
+        _$HotActionEnumMap,
+        json['action'],
+        unknownValue: HotAction.start,
+      ),
       key: (json['key'] as num?)?.toInt(),
       modifiers:
           (json['modifiers'] as List<dynamic>?)

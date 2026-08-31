@@ -30,10 +30,30 @@ class Logs extends _$Logs with AutoDisposeNotifierMixin {
   }
 
   void add(Log value) {
+    addLogs([value]);
+  }
+
+  void addLogs(List<Log> values) {
     if (!ref.mounted) {
       return;
     }
-    this.value = state.copyWith()..add(value);
+    if (values.isEmpty) {
+      return;
+    }
+    final logLevel = ref.read(patchClashConfigProvider).logLevel;
+    final newState = state.copyWith();
+    var hasNewLog = false;
+    for (final value in values) {
+      if (!logLevel.allows(value.logLevel)) {
+        continue;
+      }
+      newState.add(value);
+      hasNewLog = true;
+    }
+    if (!hasNewLog) {
+      return;
+    }
+    value = newState;
   }
 
   Future<bool> exportLogs() async {
@@ -56,6 +76,17 @@ class Requests extends _$Requests with AutoDisposeNotifierMixin {
 
   void addRequest(TrackerInfo value) {
     this.value = state.copyWith()..add(value);
+  }
+
+  void addRequests(List<TrackerInfo> values) {
+    if (values.isEmpty) {
+      return;
+    }
+    final newState = state.copyWith();
+    for (final value in values) {
+      newState.add(value);
+    }
+    value = newState;
   }
 }
 
@@ -277,6 +308,14 @@ class Query extends _$Query with AutoDisposeNotifierMixin {
   }
 }
 
+@riverpod
+class SearchUseRegex extends _$SearchUseRegex with AutoDisposeNotifierMixin {
+  @override
+  bool build(QueryTag tag) {
+    return false;
+  }
+}
+
 @Riverpod(keepAlive: true)
 class Loading extends _$Loading with AutoDisposeNotifierMixin {
   DateTime? _start;
@@ -344,7 +383,6 @@ class NetworkDetection extends _$NetworkDetection
     with AutoDisposeNotifierMixin {
   static const _timeoutDisplayDelay = Duration(seconds: 2);
 
-  bool? _preIsStart;
   CancelToken? _cancelToken;
   Timer? _timeoutTimer;
   int _checkVersion = 0;
@@ -363,20 +401,19 @@ class NetworkDetection extends _$NetworkDetection
     }, duration: commonDuration);
   }
 
+  void toggleIpVisibility() {
+    state = state.copyWith(isIpVisible: !state.isIpVisible);
+  }
+
   Future<void> _checkIp() async {
     final isInit = ref.read(initProvider);
     if (!isInit) {
-      return;
-    }
-    final isStart = ref.read(isStartProvider);
-    if (!isStart && _preIsStart == false && state.ipInfo != null) {
       return;
     }
     final cancelToken = CancelToken();
     final version = _resetCheckSession(cancelToken);
     commonPrint.log('checkIp start');
     state = state.copyWith(isLoading: true, ipInfo: null);
-    _preIsStart = isStart;
     final res = await request.checkIp(cancelToken: cancelToken);
     commonPrint.log('checkIp res: $res');
 

@@ -1,6 +1,9 @@
 import 'dart:async';
 
+import 'package:fl_clash/common/constant.dart';
+import 'package:fl_clash/core/controller.dart';
 import 'package:fl_clash/core/desktop/model.dart';
+import 'package:fl_clash/core/interface.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/providers/action.dart';
@@ -9,7 +12,10 @@ import 'package:fl_clash/providers/config.dart';
 import 'package:fl_clash/providers/database.dart';
 import 'package:fl_clash/providers/state.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:riverpod/riverpod.dart';
+
+class _MockCoreHandlerInterface extends Mock implements CoreHandlerInterface {}
 
 void main() {
   group('ProfilesAction', () {
@@ -121,6 +127,16 @@ void main() {
   });
 
   group('GeoResourceAction', () {
+    late _MockCoreHandlerInterface coreHandler;
+
+    setUp(() {
+      coreHandler = _MockCoreHandlerInterface();
+      CoreController.resetInstance();
+      CoreController.test(coreHandler);
+    });
+
+    tearDown(CoreController.resetInstance);
+
     test('GeoResource has correct updatingKey', () {
       expect(GeoResource.MMDB.updatingKey, 'geo_resource_MMDB');
       expect(GeoResource.ASN.updatingKey, 'geo_resource_ASN');
@@ -158,6 +174,59 @@ void main() {
         container.read(patchClashConfigProvider).geoXUrl[GeoResource.MMDB],
         url,
       );
+    });
+
+    test('applies the profile before updating one resource', () async {
+      final events = <String>[];
+      when(() => coreHandler.updateGeoData(GeoResource.MMDB.name)).thenAnswer((
+        _,
+      ) async {
+        events.add('update');
+        return '';
+      });
+      final container = ProviderContainer(
+        overrides: [
+          setupActionProvider.overrideWith(() => _RecordingSetupAction(events)),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(geoResourceActionProvider.notifier)
+          .updateGeoResource(GeoResource.MMDB);
+
+      expect(events, ['apply', 'update']);
+      verify(() => coreHandler.updateGeoData(GeoResource.MMDB.name)).called(1);
+    });
+
+    test('applies the profile once before updating all resources', () async {
+      final events = <String>[];
+      when(() => coreHandler.updateGeoData(any())).thenAnswer((
+        invocation,
+      ) async {
+        events.add('update:${invocation.positionalArguments.single}');
+        return '';
+      });
+      final container = ProviderContainer(
+        overrides: [
+          setupActionProvider.overrideWith(() => _RecordingSetupAction(events)),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(geoResourceActionProvider.notifier)
+          .updateAllGeoResources();
+
+      expect(events.first, 'apply');
+      expect(events.where((event) => event == 'apply'), hasLength(1));
+      expect(events.skip(1).toSet(), {
+        for (final geoResource in GeoResource.values)
+          'update:${geoResource.name}',
+      });
+      verify(
+        () => coreHandler.updateGeoData(any()),
+      ).called(GeoResource.values.length);
     });
   });
 
@@ -594,6 +663,503 @@ void main() {
       expect(container.read(autoSetSystemDnsStateProvider).a, isFalse);
     });
   });
+
+  group('ProxiesAction delay tests', () {
+    late _MockCoreHandlerInterface coreHandler;
+    late ProviderContainer container;
+
+    setUp(() {
+      coreHandler = _MockCoreHandlerInterface();
+      CoreController.resetInstance();
+      CoreController.test(coreHandler);
+      container = ProviderContainer(
+        overrides: [
+          currentProfileIdProvider.overrideWithBuild((_, _) => null),
+          profilesProvider.overrideWith(() => _TestProfiles([])),
+        ],
+      );
+    });
+
+    tearDown(() {
+      container.dispose();
+      CoreController.resetInstance();
+    });
+
+    test(
+      'resolves the real proxy and stores loading and result states',
+      () async {
+        const proxy = Proxy(name: 'Automatic', type: 'URLTest');
+        const group = Group(
+          type: GroupType.URLTest,
+          name: 'Automatic',
+          now: 'Node A',
+          testUrl: 'https://group.test',
+        );
+        final response = Completer<Delay>();
+        when(
+          () => coreHandler.asyncTestDelay('https://group.test', 'Node A'),
+        ).thenAnswer((_) => response.future);
+        container.read(groupsProvider.notifier).value = [group];
+        final observedDelays = <int?>[];
+
+        final testFuture = container
+            .read(proxiesActionProvider.notifier)
+            .testProxyDelay(
+              proxy,
+              'https://default.test',
+              onDelayChanged: () {
+                observedDelays.add(
+                  container.read(
+                    delayDataSourceProvider,
+                  )['https://group.test']?['Node A'],
+                );
+              },
+            );
+
+        expect(
+          container.read(
+            delayDataSourceProvider,
+          )['https://group.test']?['Node A'],
+          0,
+        );
+        expect(observedDelays, [0]);
+
+        response.complete(
+          const Delay(url: 'https://group.test', name: 'Node A', value: 42),
+        );
+        await testFuture;
+
+        expect(
+          container.read(
+            delayDataSourceProvider,
+          )['https://group.test']?['Node A'],
+          42,
+        );
+        expect(observedDelays, [0, 42]);
+        verify(
+          () => coreHandler.asyncTestDelay('https://group.test', 'Node A'),
+        ).called(1);
+      },
+    );
+
+    test(
+      'deduplicates resolved proxy and URL across overlapping requests',
+      () async {
+        const directProxy = Proxy(name: 'Node A', type: 'Shadowsocks');
+        const groupProxy = Proxy(name: 'Automatic', type: 'URLTest');
+        const group = Group(
+          type: GroupType.URLTest,
+          name: 'Automatic',
+          now: 'Node A',
+          testUrl: 'https://default.test',
+        );
+        final response = Completer<Delay>();
+        when(
+          () => coreHandler.asyncTestDelay('https://default.test', 'Node A'),
+        ).thenAnswer((_) => response.future);
+        container.read(groupsProvider.notifier).value = [group];
+        final changedProxies = <Proxy>[];
+        final action = container.read(proxiesActionProvider.notifier);
+
+        final firstRequest = action.testProxyDelays(
+          [directProxy, groupProxy, directProxy],
+          'https://default.test',
+          uiTimeout: const Duration(seconds: 30),
+          onDelayChanged: changedProxies.add,
+        );
+        final overlappingRequest = action.testProxyDelays(
+          [groupProxy],
+          'https://default.test',
+          uiTimeout: const Duration(seconds: 30),
+          onDelayChanged: changedProxies.add,
+        );
+
+        verify(
+          () => coreHandler.asyncTestDelay('https://default.test', 'Node A'),
+        ).called(1);
+
+        response.complete(
+          const Delay(url: 'https://default.test', name: 'Node A', value: 42),
+        );
+        await Future.wait([firstRequest, overlappingRequest]);
+
+        expect(
+          container.read(
+            delayDataSourceProvider,
+          )['https://default.test']?['Node A'],
+          42,
+        );
+        expect(
+          changedProxies.where((proxy) => proxy == directProxy),
+          hasLength(4),
+        );
+        expect(
+          changedProxies.where((proxy) => proxy == groupProxy),
+          hasLength(4),
+        );
+      },
+    );
+
+    test('allows retry after a shared delay request fails', () async {
+      const proxy = Proxy(name: 'Node A', type: 'Shadowsocks');
+      var requestCount = 0;
+      when(
+        () => coreHandler.asyncTestDelay('https://default.test', 'Node A'),
+      ).thenAnswer((_) async {
+        requestCount++;
+        if (requestCount == 1) {
+          throw TimeoutException('delay test');
+        }
+        return const Delay(
+          url: 'https://default.test',
+          name: 'Node A',
+          value: 42,
+        );
+      });
+      final action = container.read(proxiesActionProvider.notifier);
+
+      await action.testProxyDelays(
+        [proxy, proxy],
+        'https://default.test',
+        uiTimeout: const Duration(seconds: 30),
+      );
+
+      expect(requestCount, 1);
+      expect(
+        container.read(
+          delayDataSourceProvider,
+        )['https://default.test']?['Node A'],
+        -1,
+      );
+
+      await action.testProxyDelay(proxy, 'https://default.test');
+
+      expect(requestCount, 2);
+      expect(
+        container.read(
+          delayDataSourceProvider,
+        )['https://default.test']?['Node A'],
+        42,
+      );
+
+      container
+          .read(proxiesActionProvider.notifier)
+          .setDelay(
+            const Delay(url: 'https://default.test', name: 'Node A', value: 43),
+          );
+      expect(
+        container.read(
+          delayDataSourceProvider,
+        )['https://default.test']?['Node A'],
+        43,
+      );
+    });
+
+    test('manual delay result wins over core events while pending', () async {
+      const proxy = Proxy(name: 'Node A', type: 'Shadowsocks');
+      final response = Completer<Delay>();
+      when(
+        () => coreHandler.asyncTestDelay('https://default.test', 'Node A'),
+      ).thenAnswer((_) => response.future);
+      final observedDelays = <int?>[];
+
+      final testFuture = container
+          .read(proxiesActionProvider.notifier)
+          .testProxyDelay(
+            proxy,
+            'https://default.test',
+            onDelayChanged: () {
+              observedDelays.add(
+                container.read(
+                  delayDataSourceProvider,
+                )['https://default.test']?['Node A'],
+              );
+            },
+          );
+
+      container
+          .read(proxiesActionProvider.notifier)
+          .setDelay(
+            const Delay(url: 'https://default.test', name: 'Node A', value: -1),
+          );
+      expect(
+        container.read(
+          delayDataSourceProvider,
+        )['https://default.test']?['Node A'],
+        0,
+      );
+      response.complete(
+        const Delay(url: 'https://default.test', name: 'Node A', value: 42),
+      );
+      await testFuture;
+
+      expect(observedDelays, [0, 42]);
+      expect(
+        container.read(
+          delayDataSourceProvider,
+        )['https://default.test']?['Node A'],
+        42,
+      );
+    });
+
+    test('publishes each result without waiting for slower proxies', () async {
+      const fastProxy = Proxy(name: 'Fast', type: 'Shadowsocks');
+      const slowProxy = Proxy(name: 'Slow', type: 'Shadowsocks');
+      final fastResponse = Completer<Delay>();
+      final slowResponse = Completer<Delay>();
+      final fastResultPublished = Completer<void>();
+      when(
+        () => coreHandler.asyncTestDelay('https://default.test', 'Fast'),
+      ).thenAnswer((_) => fastResponse.future);
+      when(
+        () => coreHandler.asyncTestDelay('https://default.test', 'Slow'),
+      ).thenAnswer((_) => slowResponse.future);
+
+      final groupTestFuture = container
+          .read(proxiesActionProvider.notifier)
+          .testProxyDelays(
+            [fastProxy, slowProxy],
+            'https://default.test',
+            uiTimeout: const Duration(seconds: 30),
+            onDelayChanged: (proxy) {
+              final delay = container.read(
+                delayDataSourceProvider.select(
+                  (delayMap) => delayMap['https://default.test']?[proxy.name],
+                ),
+              );
+              if (proxy.name == fastProxy.name &&
+                  delay == 42 &&
+                  !fastResultPublished.isCompleted) {
+                fastResultPublished.complete();
+              }
+            },
+          );
+
+      fastResponse.complete(
+        const Delay(url: 'https://default.test', name: 'Fast', value: 42),
+      );
+      await fastResultPublished.future;
+
+      expect(
+        container.read(
+          delayDataSourceProvider,
+        )['https://default.test']?[fastProxy.name],
+        42,
+      );
+      expect(
+        container.read(
+          delayDataSourceProvider,
+        )['https://default.test']?[slowProxy.name],
+        0,
+      );
+
+      slowResponse.complete(
+        const Delay(url: 'https://default.test', name: 'Slow', value: 84),
+      );
+      await groupTestFuture;
+    });
+
+    test(
+      'returns after the UI timeout while requests respect the concurrency limit',
+      () async {
+        final proxies = List.generate(
+          51,
+          (index) => Proxy(name: 'Node $index', type: 'Shadowsocks'),
+        );
+        final responses = {
+          for (final proxy in proxies) proxy.name: Completer<Delay>(),
+        };
+        final requestedNames = <String>[];
+        final firstBatchStarted = Completer<void>();
+        final secondBatchStarted = Completer<void>();
+        final lastResultPublished = Completer<void>();
+        when(
+          () => coreHandler.asyncTestDelay('https://default.test', any()),
+        ).thenAnswer((invocation) {
+          final proxyName = invocation.positionalArguments[1] as String;
+          requestedNames.add(proxyName);
+          if (requestedNames.length == maxConcurrentDelayTests) {
+            firstBatchStarted.complete();
+          }
+          if (proxyName == proxies.last.name) {
+            secondBatchStarted.complete();
+          }
+          return responses[proxyName]!.future;
+        });
+
+        final uiFuture = container
+            .read(proxiesActionProvider.notifier)
+            .testProxyDelays(
+              proxies,
+              'https://default.test',
+              uiTimeout: Duration.zero,
+              onDelayChanged: (proxy) {
+                final delay = container.read(
+                  delayDataSourceProvider.select(
+                    (delayMap) => delayMap['https://default.test']?[proxy.name],
+                  ),
+                );
+                if (proxy == proxies.last &&
+                    delay == 42 &&
+                    !lastResultPublished.isCompleted) {
+                  lastResultPublished.complete();
+                }
+              },
+            );
+
+        await firstBatchStarted.future;
+        await uiFuture;
+        expect(requestedNames, hasLength(maxConcurrentDelayTests));
+        expect(requestedNames, isNot(contains(proxies.last.name)));
+        expect(
+          container.read(
+            delayDataSourceProvider,
+          )['https://default.test']?[proxies.last.name],
+          0,
+        );
+
+        container
+            .read(proxiesActionProvider.notifier)
+            .setDelay(
+              Delay(
+                url: 'https://default.test',
+                name: proxies.last.name,
+                value: -1,
+              ),
+            );
+        expect(
+          container.read(
+            delayDataSourceProvider,
+          )['https://default.test']?[proxies.last.name],
+          0,
+        );
+
+        for (final proxy in proxies.take(maxConcurrentDelayTests)) {
+          responses[proxy.name]!.complete(
+            Delay(url: 'https://default.test', name: proxy.name, value: 42),
+          );
+        }
+        await secondBatchStarted.future;
+
+        responses[proxies.last.name]!.complete(
+          Delay(
+            url: 'https://default.test',
+            name: proxies.last.name,
+            value: 42,
+          ),
+        );
+        await lastResultPublished.future;
+      },
+    );
+
+    test('publishes timeout state for a failed delay request', () async {
+      const proxy = Proxy(name: 'Node A', type: 'Shadowsocks');
+      when(
+        () => coreHandler.asyncTestDelay('https://default.test', 'Node A'),
+      ).thenAnswer((_) async => throw TimeoutException('delay test'));
+      final observedDelays = <int?>[];
+
+      final testFuture = container
+          .read(proxiesActionProvider.notifier)
+          .testProxyDelay(
+            proxy,
+            'https://default.test',
+            onDelayChanged: () {
+              observedDelays.add(
+                container.read(
+                  delayDataSourceProvider,
+                )['https://default.test']?['Node A'],
+              );
+            },
+          );
+
+      await expectLater(testFuture, throwsA(isA<TimeoutException>()));
+      expect(observedDelays, [0, -1]);
+      expect(
+        container.read(
+          delayDataSourceProvider,
+        )['https://default.test']?['Node A'],
+        -1,
+      );
+    });
+  });
+
+  group('ProxiesAction group updates', () {
+    late _MockCoreHandlerInterface coreHandler;
+
+    setUp(() {
+      coreHandler = _MockCoreHandlerInterface();
+      CoreController.resetInstance();
+      CoreController.test(coreHandler);
+    });
+
+    tearDown(CoreController.resetInstance);
+
+    test(
+      'removes unavailable proxy selections from the current profile',
+      () async {
+        final profile = Profile.normal().copyWith(
+          selectedMap: {
+            'Available': 'Node A',
+            'Changed': 'Removed Node',
+            'Removed Group': 'Node C',
+            'Empty': 'COMPATIBLE',
+          },
+        );
+        final container = ProviderContainer(
+          overrides: [
+            currentProfileIdProvider.overrideWithBuild((_, _) => profile.id),
+            profilesProvider.overrideWith(() => _TestProfiles([profile])),
+          ],
+        );
+        addTearDown(container.dispose);
+        when(() => coreHandler.getProxies()).thenAnswer(
+          (_) async => ProxiesData(
+            all: [
+              'Available',
+              'Changed',
+              'Empty',
+              'Node A',
+              'Node B',
+              'COMPATIBLE',
+            ],
+            proxies: Map<String, dynamic>.from({
+              'Available': {
+                'name': 'Available',
+                'type': 'Selector',
+                'all': ['Node A'],
+              },
+              'Changed': {
+                'name': 'Changed',
+                'type': 'Selector',
+                'all': ['Node B'],
+              },
+              'Empty': {
+                'name': 'Empty',
+                'type': 'Selector',
+                'all': ['COMPATIBLE'],
+              },
+              'Node A': {'name': 'Node A', 'type': 'Shadowsocks'},
+              'Node B': {'name': 'Node B', 'type': 'Shadowsocks'},
+              'COMPATIBLE': {'name': 'COMPATIBLE', 'type': 'Compatible'},
+            }),
+          ),
+        );
+
+        await container.read(proxiesActionProvider.notifier).updateGroups();
+
+        expect(
+          container.read(profilesProvider).getProfile(profile.id)?.selectedMap,
+          {'Available': 'Node A'},
+        );
+        expect(container.read(groupsProvider).map((group) => group.name), [
+          'Available',
+          'Changed',
+          'Empty',
+        ]);
+      },
+    );
+  });
 }
 
 class _TestProfiles extends Profiles {
@@ -670,6 +1236,22 @@ const _restartResult = CoreLifecycleResult(
   revision: 1,
   outcome: CoreLifecycleOutcome.applied,
 );
+
+class _RecordingSetupAction extends SetupAction {
+  final List<String> events;
+
+  _RecordingSetupAction(this.events);
+
+  @override
+  Future<void> applyProfile({
+    bool silence = false,
+    bool force = false,
+    Future<void> Function()? preloadInvoke,
+  }) async {
+    expect(silence, isTrue);
+    events.add('apply');
+  }
+}
 
 class _RestartRecordingCoreAction extends CoreAction {
   int restartCount = 0;

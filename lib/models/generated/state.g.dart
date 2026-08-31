@@ -13,22 +13,24 @@ _SharedState _$SharedStateFromJson(Map<String, dynamic> json) => _SharedState(
   vpnOptions: json['vpnOptions'] == null
       ? null
       : VpnOptions.fromJson(json['vpnOptions'] as Map<String, dynamic>),
-  stopTip: json['stopTip'] as String,
-  startTip: json['startTip'] as String,
   currentProfileName: json['currentProfileName'] as String,
-  stopText: json['stopText'] as String,
   onlyStatisticsProxy: json['onlyStatisticsProxy'] as bool,
-  crashlytics: json['crashlytics'] as bool,
+  networkSpeedNotification: json['networkSpeedNotification'] as bool,
+  alwaysOn: json['alwaysOn'] as bool? ?? false,
+  excludeSSIDs:
+      (json['excludeSSIDs'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList() ??
+      const [],
 );
 
 Map<String, dynamic> _$SharedStateToJson(_SharedState instance) =>
     <String, dynamic>{
       'setupParams': instance.setupParams,
       'vpnOptions': instance.vpnOptions,
-      'stopTip': instance.stopTip,
-      'startTip': instance.startTip,
       'currentProfileName': instance.currentProfileName,
-      'stopText': instance.stopText,
       'onlyStatisticsProxy': instance.onlyStatisticsProxy,
-      'crashlytics': instance.crashlytics,
+      'networkSpeedNotification': instance.networkSpeedNotification,
+      'alwaysOn': instance.alwaysOn,
+      'excludeSSIDs': instance.excludeSSIDs,
     };

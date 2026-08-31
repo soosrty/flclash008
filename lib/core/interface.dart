@@ -21,9 +21,15 @@ mixin CoreInterface {
 
   Future<bool> forceGc();
 
-  Future<String> validateConfig(String path);
+  Future<String> validateConfig(String data);
 
-  Future<Map<String, dynamic>> getConfig(String path);
+  Future<String> decryptAgeConfig(String data, String ageSecretKey);
+
+  Future<Map<String, dynamic>> getProfileConfig(int profileId);
+
+  Future<Map<String, String>> generateAgeKeyPair();
+
+  Future<String> convertAgeSecretKeyToPublicKey(String secretKey);
 
   Future<Delay> asyncTestDelay(String url, String proxyName);
 
@@ -33,7 +39,10 @@ mixin CoreInterface {
 
   Future<ProxiesData> getProxies();
 
-  Future<String> changeProxy(ChangeProxyParams changeProxyParams);
+  Future<String> changeProxy(
+    ChangeProxyParams changeProxyParams, {
+    bool closeConnections = false,
+  });
 
   Future<bool> startListener();
 
@@ -42,6 +51,19 @@ mixin CoreInterface {
   Future<List<ExternalProvider>> getExternalProviders();
 
   Future<ExternalProvider?> getExternalProvider(String externalProviderName);
+
+  Future<List<OverlayNetworkStatus>> getOverlayNetworkStatus(
+    GetOverlayNetworkStatusParams params,
+  );
+
+  Future<OverlayNetworkStatus> activateOverlayNetwork(
+    String name,
+    OverlayNetworkKind kind,
+  );
+
+  Future<TailscalePingResult> pingTailscaleNode(String name, String ip);
+
+  Future<bool> logoutTailscale(String name);
 
   Future<String> updateGeoData(String type);
 
@@ -60,11 +82,17 @@ mixin CoreInterface {
 
   FutureOr<int> getMemory();
 
+  FutureOr<int> getGoroutineCount();
+
   FutureOr<void> resetTraffic();
 
-  FutureOr<void> startLog();
+  FutureOr<List<Log>> startLogNotify();
 
-  FutureOr<void> stopLog();
+  FutureOr<void> stopLogNotify();
+
+  FutureOr<List<TrackerInfo>> startRequestNotify();
+
+  FutureOr<void> stopRequestNotify();
 
   Future<bool> crash();
 
@@ -73,6 +101,8 @@ mixin CoreInterface {
   FutureOr<bool> closeConnection(String id);
 
   FutureOr<String> clearEffect(int profileId);
+
+  FutureOr<String> deleteManagedPath(DeleteManagedPathParams params);
 
   FutureOr<bool> closeConnections();
 
@@ -132,10 +162,19 @@ abstract class CoreHandlerInterface with CoreInterface {
   }
 
   @override
-  Future<String> validateConfig(String path) async {
+  Future<String> validateConfig(String data) async {
     return await _invokeMethod<String>(
           method: CoreMethod.validateConfig,
-          arguments: path,
+          arguments: data,
+        ) ??
+        '';
+  }
+
+  @override
+  Future<String> decryptAgeConfig(String data, String ageSecretKey) async {
+    return await _invokeMethod<String>(
+          method: CoreMethod.decryptAgeConfig,
+          arguments: {'data': data, 'age-secret-key': ageSecretKey},
         ) ??
         '';
   }
@@ -150,10 +189,10 @@ abstract class CoreHandlerInterface with CoreInterface {
   }
 
   @override
-  Future<Map<String, dynamic>> getConfig(String path) async {
+  Future<Map<String, dynamic>> getProfileConfig(int profileId) async {
     final result = await _invokeMethod<Map<String, dynamic>>(
-      method: CoreMethod.getConfig,
-      arguments: path,
+      method: CoreMethod.getProfileConfig,
+      arguments: profileId,
     );
     if (result == null) {
       throw const CoreMethodException(
@@ -162,6 +201,23 @@ abstract class CoreHandlerInterface with CoreInterface {
       );
     }
     return result;
+  }
+
+  @override
+  Future<Map<String, String>> generateAgeKeyPair() async {
+    final result = await _invokeMethod<Map<String, dynamic>>(
+      method: CoreMethod.generateAgeKeyPair,
+    );
+    return Map<String, String>.from(result ?? const {});
+  }
+
+  @override
+  Future<String> convertAgeSecretKeyToPublicKey(String secretKey) async {
+    return await _invokeMethod<String>(
+          method: CoreMethod.convertAgeSecretKeyToPublicKey,
+          arguments: secretKey,
+        ) ??
+        '';
   }
 
   @override
@@ -189,10 +245,17 @@ abstract class CoreHandlerInterface with CoreInterface {
   }
 
   @override
-  Future<String> changeProxy(ChangeProxyParams changeProxyParams) async {
+  Future<String> changeProxy(
+    ChangeProxyParams changeProxyParams, {
+    bool closeConnections = false,
+  }) async {
+    final arguments = {
+      ...changeProxyParams.toJson(),
+      'close-connections': closeConnections,
+    };
     return await _invokeMethod<String>(
           method: CoreMethod.changeProxy,
-          arguments: changeProxyParams.toJson(),
+          arguments: arguments,
         ) ??
         '';
   }
@@ -221,6 +284,67 @@ abstract class CoreHandlerInterface with CoreInterface {
       arguments: externalProviderName,
     );
     return data == null ? null : ExternalProvider.fromJson(data);
+  }
+
+  @override
+  Future<List<OverlayNetworkStatus>> getOverlayNetworkStatus(
+    GetOverlayNetworkStatusParams params,
+  ) async {
+    final data = await _invokeMethod<List<dynamic>>(
+      method: CoreMethod.getOverlayNetworkStatus,
+      arguments: params.toJson(),
+    );
+    return data
+            ?.whereType<Map>()
+            .map(
+              (item) => OverlayNetworkStatus.fromJson(
+                Map<String, Object?>.from(item),
+              ),
+            )
+            .toList() ??
+        [];
+  }
+
+  @override
+  Future<OverlayNetworkStatus> activateOverlayNetwork(
+    String name,
+    OverlayNetworkKind kind,
+  ) async {
+    final data = await _invokeMethod<Map<String, dynamic>>(
+      method: CoreMethod.activateOverlayNetwork,
+      arguments: {'name': name, 'kind': kind.name},
+    );
+    if (data == null) {
+      throw const CoreMethodException(
+        code: 'invalid_response',
+        message: 'Missing overlay network activation result',
+      );
+    }
+    return OverlayNetworkStatus.fromJson(data);
+  }
+
+  @override
+  Future<TailscalePingResult> pingTailscaleNode(String name, String ip) async {
+    final data = await _invokeMethod<Map<String, dynamic>>(
+      method: CoreMethod.pingTailscaleNode,
+      arguments: {'name': name, 'ip': ip},
+    );
+    if (data == null) {
+      throw const CoreMethodException(
+        code: 'invalid_response',
+        message: 'Missing Tailscale ping result',
+      );
+    }
+    return TailscalePingResult.fromJson(data);
+  }
+
+  @override
+  Future<bool> logoutTailscale(String name) async {
+    return await _invokeMethod<bool>(
+          method: CoreMethod.logoutTailscale,
+          arguments: {'name': name},
+        ) ??
+        false;
   }
 
   @override
@@ -317,18 +441,55 @@ abstract class CoreHandlerInterface with CoreInterface {
   }
 
   @override
+  Future<String> deleteManagedPath(DeleteManagedPathParams params) async {
+    return await _invokeMethod<String>(
+          method: CoreMethod.deleteManagedPath,
+          arguments: params.toJson(),
+        ) ??
+        '';
+  }
+
+  @override
   FutureOr<void> resetTraffic() {
     _invokeMethod(method: CoreMethod.resetTraffic);
   }
 
   @override
-  FutureOr<void> startLog() {
-    _invokeMethod(method: CoreMethod.startLog);
+  Future<List<Log>> startLogNotify() async {
+    final res = await _invokeMethod<List<dynamic>>(
+      method: CoreMethod.startLogNotify,
+    );
+    if (res == null || res.isEmpty) {
+      return [];
+    }
+    return res
+        .whereType<Map>()
+        .map((item) => Log.fromJson(Map<String, Object?>.from(item)))
+        .toList();
   }
 
   @override
-  FutureOr<void> stopLog() {
-    _invokeMethod<bool>(method: CoreMethod.stopLog);
+  FutureOr<void> stopLogNotify() {
+    _invokeMethod<bool>(method: CoreMethod.stopLogNotify);
+  }
+
+  @override
+  Future<List<TrackerInfo>> startRequestNotify() async {
+    final res = await _invokeMethod<List<dynamic>>(
+      method: CoreMethod.startRequestNotify,
+    );
+    if (res == null || res.isEmpty) {
+      return [];
+    }
+    return res
+        .whereType<Map>()
+        .map((item) => TrackerInfo.fromJson(Map<String, Object?>.from(item)))
+        .toList();
+  }
+
+  @override
+  FutureOr<void> stopRequestNotify() {
+    _invokeMethod<bool>(method: CoreMethod.stopRequestNotify);
   }
 
   @override
@@ -370,5 +531,10 @@ abstract class CoreHandlerInterface with CoreInterface {
   @override
   Future<int> getMemory() async {
     return await _invokeMethod<int>(method: CoreMethod.getMemory) ?? 0;
+  }
+
+  @override
+  Future<int> getGoroutineCount() async {
+    return await _invokeMethod<int>(method: CoreMethod.getGoroutineCount) ?? 0;
   }
 }

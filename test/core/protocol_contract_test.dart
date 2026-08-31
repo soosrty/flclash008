@@ -73,11 +73,83 @@ class _RecordingCoreHandler extends CoreHandlerInterface {
         'vehicle-type': 'HTTP',
         'update-at': '2024-01-01T00:00:00.000Z',
       },
-      CoreMethod.getConfig => {
+      CoreMethod.getOverlayNetworkStatus => [
+        {
+          'name': 'tailnet',
+          'kind': 'tailscale',
+          'state': 'connected',
+          'raw-state': 'Running',
+          'network-name': 'example.com',
+          'details': {
+            'magic-dns-suffix': 'example.com',
+            'auth-key-configured': true,
+            'health': <String>[],
+            'nodes': [
+              {
+                'id': 'node-1',
+                'public-key': 'nodekey:test',
+                'hostname': 'device',
+                'dns-name': 'device.example.com.',
+                'os': 'windows',
+                'ips': ['100.64.0.1'],
+                'endpoints': ['192.0.2.1:41641'],
+                'online': true,
+                'active': true,
+                'self': true,
+                'exit-node': false,
+                'exit-node-option': false,
+                'expired': false,
+              },
+            ],
+          },
+        },
+        {
+          'name': 'zerotier',
+          'kind': 'zerotier',
+          'state': 'connected',
+          'raw-state': 'ok',
+          'network-name': 'example',
+          'details': {
+            'network-id': '8056c2e21c000001',
+            'node': 'abcdef1234',
+            'online': true,
+            'addresses': ['10.0.0.2/24'],
+            'routes': ['10.0.0.0/24'],
+            'dns': ['10.0.0.1:53'],
+            'mtu': 2800,
+            'peers': [
+              {
+                'address': '1234567890',
+                'role': 'leaf',
+                'version': '1.14.2',
+                'direct': true,
+                'endpoints': ['192.0.2.1:9993'],
+                'latency-ms': 12,
+              },
+            ],
+          },
+        },
+      ],
+      CoreMethod.activateOverlayNetwork => {
+        'name': 'tailnet',
+        'kind': 'tailscale',
+        'state': 'connected',
+        'raw-state': 'Running',
+        'network-name': 'example.com',
+      },
+      CoreMethod.pingTailscaleNode => {'latency-ms': 23},
+      CoreMethod.logoutTailscale => true,
+      CoreMethod.getProfileConfig => {
         'mode': 'rule',
         'rule': ['MATCH,DIRECT'],
       },
+      CoreMethod.generateAgeKeyPair => {
+        'secret-key': 'AGE-SECRET-KEY-1',
+        'public-key': 'age1public',
+      },
+      CoreMethod.convertAgeSecretKeyToPublicKey => 'age1public',
       CoreMethod.getMemory => 2048,
+      CoreMethod.getGoroutineCount => 42,
       _ => '',
     };
     return result as T;
@@ -91,11 +163,11 @@ class _FailingConfigCoreHandler extends _RecordingCoreHandler {
     Object? arguments,
     Duration? timeout,
   }) async {
-    if (method == CoreMethod.getConfig) {
+    if (method == CoreMethod.getProfileConfig) {
       throw const CoreMethodException(
         code: 'core_error',
         message: 'config not found',
-        details: {'path': '/missing.yaml'},
+        details: {'profile-id': 404},
       );
     }
     return super.invokeMethod(
@@ -113,7 +185,7 @@ class _EmptyConfigCoreHandler extends _RecordingCoreHandler {
     Object? arguments,
     Duration? timeout,
   }) async {
-    if (method == CoreMethod.getConfig) {
+    if (method == CoreMethod.getProfileConfig) {
       return null;
     }
     return super.invokeMethod(
@@ -151,10 +223,20 @@ void main() {
     );
     await handler.changeProxy(
       const ChangeProxyParams(groupName: 'GLOBAL', proxyName: 'DIRECT'),
+      closeConnections: true,
     );
     await handler.sideLoadExternalProvider(providerName: 'provider', data: 'x');
     await handler.asyncTestDelay('https://example.com', 'DIRECT');
     await handler.clearEffect(42);
+    await handler.convertAgeSecretKeyToPublicKey('AGE-SECRET-KEY-1');
+    await handler.validateConfig('mode: rule');
+    await handler.getProfileConfig(7);
+    await handler.deleteManagedPath(
+      const DeleteManagedPathParams(
+        scope: ManagedPathScope.providers,
+        relativePath: '7',
+      ),
+    );
 
     for (final method in [
       CoreMethod.initClash,
@@ -162,10 +244,26 @@ void main() {
       CoreMethod.changeProxy,
       CoreMethod.sideLoadExternalProvider,
       CoreMethod.asyncTestDelay,
+      CoreMethod.deleteManagedPath,
     ]) {
       expect(handler.calls[method], isA<Map>());
     }
     expect(handler.calls[CoreMethod.clearEffect], 42);
+    expect(
+      handler.calls[CoreMethod.convertAgeSecretKeyToPublicKey],
+      'AGE-SECRET-KEY-1',
+    );
+    expect(handler.calls[CoreMethod.validateConfig], 'mode: rule');
+    expect(handler.calls[CoreMethod.getProfileConfig], 7);
+    expect(handler.calls[CoreMethod.changeProxy], {
+      'group-name': 'GLOBAL',
+      'proxy-name': 'DIRECT',
+      'close-connections': true,
+    });
+    expect(handler.calls[CoreMethod.deleteManagedPath], {
+      'scope': 'providers',
+      'relative-path': '7',
+    });
   });
 
   test('event contract accepts batches and legacy single events', () async {
@@ -215,33 +313,105 @@ void main() {
       (await handler.getExternalProvider('provider-1'))?.name,
       'provider-1',
     );
-    expect(await handler.getConfig('/config.yaml'), {
+    final overlayStatuses = await handler.getOverlayNetworkStatus(
+      const GetOverlayNetworkStatusParams(
+        targets: [
+          OverlayNetworkTarget(
+            name: 'tailnet',
+            kind: OverlayNetworkKind.tailscale,
+            level: OverlayNetworkDetailLevel.details,
+          ),
+          OverlayNetworkTarget(
+            name: 'zerotier',
+            kind: OverlayNetworkKind.zerotier,
+            level: OverlayNetworkDetailLevel.details,
+          ),
+        ],
+      ),
+    );
+    expect(overlayStatuses.first.state, OverlayNetworkState.connected);
+    expect(
+      overlayStatuses.first.tailscaleDetails?.magicDnsSuffix,
+      'example.com',
+    );
+    expect(overlayStatuses.first.tailscaleDetails?.nodes.single.ips, [
+      '100.64.0.1',
+    ]);
+    expect(
+      overlayStatuses.first.tailscaleDetails?.nodes.single.hostName,
+      'device',
+    );
+    expect(
+      overlayStatuses.first.tailscaleDetails?.nodes.single.dnsName,
+      'device.example.com.',
+    );
+    expect(
+      overlayStatuses.first.tailscaleDetails?.nodes.single.publicKey,
+      'nodekey:test',
+    );
+    expect(overlayStatuses.first.tailscaleDetails?.nodes.single.endpoints, [
+      '192.0.2.1:41641',
+    ]);
+    expect(overlayStatuses.last.zeroTierDetails?.peers.single.latencyMs, 12);
+    expect(handler.calls[CoreMethod.getOverlayNetworkStatus], {
+      'targets': [
+        {'name': 'tailnet', 'kind': 'tailscale', 'level': 'details'},
+        {'name': 'zerotier', 'kind': 'zerotier', 'level': 'details'},
+      ],
+    });
+    final activated = await handler.activateOverlayNetwork(
+      'tailnet',
+      OverlayNetworkKind.tailscale,
+    );
+    expect(activated.state, OverlayNetworkState.connected);
+    expect(handler.calls[CoreMethod.activateOverlayNetwork], {
+      'name': 'tailnet',
+      'kind': 'tailscale',
+    });
+    expect(
+      (await handler.pingTailscaleNode('tailnet', '100.64.0.1')).latencyMs,
+      23,
+    );
+    expect(handler.calls[CoreMethod.pingTailscaleNode], {
+      'name': 'tailnet',
+      'ip': '100.64.0.1',
+    });
+    expect(await handler.logoutTailscale('tailnet'), isTrue);
+    expect(handler.calls[CoreMethod.logoutTailscale], {'name': 'tailnet'});
+    expect(await handler.getProfileConfig(7), {
       'mode': 'rule',
       'rule': ['MATCH,DIRECT'],
     });
+    expect(await handler.generateAgeKeyPair(), {
+      'secret-key': 'AGE-SECRET-KEY-1',
+      'public-key': 'age1public',
+    });
+    expect(
+      await handler.convertAgeSecretKeyToPublicKey('AGE-SECRET-KEY-1'),
+      'age1public',
+    );
     expect(await handler.getMemory(), 2048);
+    expect(await handler.getGoroutineCount(), 42);
   });
 
-  test('getConfig preserves structured core errors', () async {
+  test('getProfileConfig preserves structured core errors', () async {
     final handler = _FailingConfigCoreHandler();
 
     await expectLater(
-      handler.getConfig('/missing.yaml'),
+      handler.getProfileConfig(404),
       throwsA(
         isA<CoreMethodException>()
             .having((error) => error.code, 'code', 'core_error')
-            .having((error) => error.details, 'details', {
-              'path': '/missing.yaml',
-            }),
+            .having((error) => error.details, 'details', {'profile-id': 404}),
       ),
     );
   });
 
-  test('getConfig rejects empty transport results', () async {
+  test('getProfileConfig rejects empty transport results', () async {
     final handler = _EmptyConfigCoreHandler();
 
     await expectLater(
-      handler.getConfig('/config.yaml'),
+      handler.getProfileConfig(7),
       throwsA(
         isA<CoreMethodException>().having(
           (error) => error.code,

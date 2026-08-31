@@ -20,6 +20,9 @@ GroupsState currentGroupsState(Ref ref) {
   final mode = ref.watch(
     patchClashConfigProvider.select((state) => state.mode),
   );
+  final showHiddenGroups = ref.watch(
+    proxiesStyleSettingProvider.select((state) => state.showHiddenGroups),
+  );
   final groups = ref.watch(
     groupsProvider.select(
       (state) => state.map((item) {
@@ -36,7 +39,7 @@ GroupsState currentGroupsState(Ref ref) {
       Mode.global => groups.toList(),
       Mode.rule =>
         groups
-            .where((item) => item.hidden == false)
+            .where((item) => showHiddenGroups || item.hidden != true)
             .where((element) => element.name != GroupName.GLOBAL.name)
             .toList(),
     },
@@ -52,11 +55,24 @@ NavigationItemsState navigationItemsState(Ref ref) {
   final hasProxies = ref.watch(
     currentGroupsStateProvider.select((state) => state.value.isNotEmpty),
   );
+  final hasNetworking = ref.watch(
+    groupsProvider.select(
+      (state) => state.any(
+        (group) => group.all.any(
+          (proxy) => const {
+            'tailscale',
+            'zerotier',
+          }.contains(proxy.type.toLowerCase()),
+        ),
+      ),
+    ),
+  );
   final isInit = ref.watch(initProvider);
   return NavigationItemsState(
     value: navigation.getItems(
       openLogs: openLogs,
       hasProxies: !isInit ? hasProfiles : hasProxies,
+      hasNetworking: hasNetworking,
     ),
   );
 }
@@ -92,6 +108,7 @@ UpdateParams updateParams(Ref ref) {
         ipv6: state.ipv6,
         tcpConcurrent: state.tcpConcurrent,
         externalController: state.externalController,
+        secret: state.secret,
         unifiedDelay: state.unifiedDelay,
         mixedPort: state.mixedPort,
         geoAutoUpdate: state.geoAutoUpdate,
@@ -103,7 +120,7 @@ UpdateParams updateParams(Ref ref) {
 
 @riverpod
 ProxyState proxyState(Ref ref) {
-  final suspend = ref.watch(suspendProvider);
+  final suspend = system.isIOS ? false : ref.watch(suspendProvider);
   final isStart = ref.watch(runTimeProvider.select((state) => state != null));
   final vm2 = ref.watch(
     networkSettingProvider.select(
@@ -116,7 +133,7 @@ ProxyState proxyState(Ref ref) {
   return ProxyState(
     isStart: suspend ? false : isStart,
     systemProxy: vm2.a,
-    bassDomain: vm2.b,
+    bypassDomain: vm2.b,
     port: mixedPort,
   );
 }
@@ -132,48 +149,48 @@ TrayState trayState(Ref ref) {
       (state) => VM3(state.mode, state.mixedPort, state.tun.enable),
     ),
   );
-  final appSettingVm3 = ref.watch(
-    appSettingProvider.select(
-      (state) => VM3(state.autoLaunch, state.locale, state.showTrayTitle),
+  final appSettingVm2 = ref.watch(
+    appSettingProvider.select((state) => VM2(state.autoLaunch, state.locale)),
+  );
+  final showNetworkSpeed = ref.watch(
+    vpnSettingProvider.select((state) => state.networkSpeedNotification),
+  );
+  final currentGroups = ref.watch(currentGroupsStateProvider).value;
+  final groupNowMap = ref.watch(
+    groupsProvider.select(
+      (groups) => {for (final group in groups) group.name: group.now},
     ),
   );
-  final groups = ref.watch(currentGroupsStateProvider).value;
+  final groups = currentGroups
+      .map((group) => group.copyWith(now: groupNowMap[group.name]))
+      .toList();
   final brightness = ref.watch(systemBrightnessProvider);
   final selectedMap = ref.watch(selectedMapProvider);
+  final monochromeTrayIcon = ref.watch(
+    themeSettingProvider.select((state) => state.monochromeTrayIcon),
+  );
 
   return TrayState(
     mode: clashConfigVm3.a,
     port: clashConfigVm3.b,
-    autoLaunch: appSettingVm3.a,
+    autoLaunch: appSettingVm2.a,
     systemProxy: systemProxy,
     tunEnable: clashConfigVm3.c,
     isStart: isStart,
-    locale: appSettingVm3.b,
+    locale: appSettingVm2.b,
     brightness: brightness,
     groups: groups,
     selectedMap: selectedMap,
-    showTrayTitle: appSettingVm3.c,
+    showNetworkSpeed: showNetworkSpeed,
+    monochromeTrayIcon: monochromeTrayIcon,
   );
 }
 
 @riverpod
-TrayTitleState trayTitleState(Ref ref) {
-  final showTrayTitle = ref.watch(
-    appSettingProvider.select((state) => state.showTrayTitle),
+VpnOptions? vpnOptions(Ref ref) {
+  return ref.watch(
+    sharedStateProvider.select((state) => state.vpnOptions),
   );
-  final traffic = ref.watch(
-    trafficsProvider.select((state) => state.list.safeLast(const Traffic())),
-  );
-  return TrayTitleState(showTrayTitle: showTrayTitle, traffic: traffic);
-}
-
-@riverpod
-VpnState vpnState(Ref ref) {
-  final vpnProps = ref.watch(vpnSettingProvider);
-  final stack = ref.watch(
-    patchClashConfigProvider.select((state) => state.tun.stack),
-  );
-  return VpnState(stack: stack, vpnProps: vpnProps);
 }
 
 @riverpod
@@ -229,16 +246,34 @@ ProfilesState profilesState(Ref ref) {
 @riverpod
 GroupsState filterGroupsState(Ref ref, String query) {
   final currentGroups = ref.watch(currentGroupsStateProvider);
-  if (query.isEmpty) {
+  final hideUnavailable = ref.watch(
+    proxiesStyleSettingProvider.select((state) => state.hideUnavailable),
+  );
+  if (query.isEmpty && !hideUnavailable) {
     return currentGroups;
   }
-  final lowQuery = query.toLowerCase();
+  final useRegex = ref.watch(searchUseRegexProvider(QueryTag.proxies));
+  final matcher = query.isNotEmpty
+      ? SearchMatcher(query, useRegex: useRegex)
+      : null;
+  final delayMap = hideUnavailable ? ref.watch(delayDataSourceProvider) : null;
+  final defaultTestUrl = hideUnavailable
+      ? ref.watch(appSettingProvider.select((state) => state.testUrl))
+      : null;
   final groups = currentGroups.value
       .map((group) {
         return group.copyWith(
-          all: group.all
-              .where((proxy) => proxy.name.toLowerCase().contains(lowQuery))
-              .toList(),
+          all: group.all.where((proxy) {
+            if (matcher != null && !matcher.hasMatch(proxy.name)) {
+              return false;
+            }
+            if (delayMap != null) {
+              final testUrl = group.testUrl.takeFirstValid([defaultTestUrl!]);
+              final delay = delayMap[testUrl]?[proxy.name];
+              if (delay != null && delay < 0) return false;
+            }
+            return true;
+          }).toList(),
         );
       })
       .where((group) => group.all.isNotEmpty)
@@ -559,7 +594,6 @@ VM3<bool, int, ProxiesSortType> needUpdateGroups(Ref ref) {
 
 @riverpod
 SharedState sharedState(Ref ref) {
-  ref.watch((appSettingProvider).select((state) => state.locale));
   final currentProfileVM2 = ref.watch(
     currentProfileProvider.select(
       (state) => VM2(state?.label ?? '', state?.selectedMap ?? {}),
@@ -567,33 +601,37 @@ SharedState sharedState(Ref ref) {
   );
   final appSettingVM3 = ref.watch(
     appSettingProvider.select(
-      (state) =>
-          VM3(state.onlyStatisticsProxy, state.crashlytics, state.testUrl),
+      (state) => VM2(state.onlyStatisticsProxy, state.testUrl),
     ),
   );
   final bypassDomain = ref.watch(
     networkSettingProvider.select((state) => state.bypassDomain),
   );
-  final clashConfigVM2 = ref.watch(
+  final clashConfigVM3 = ref.watch(
     patchClashConfigProvider.select(
-      (state) => VM2(state.tun.stack.name, state.mixedPort),
+      (state) => VM3(state.tun.stack.name, state.mixedPort, state.tun.mtu),
     ),
+  );
+  final tun = ref.watch(patchClashConfigProvider.select((state) => state.tun));
+  final routeMode = ref.watch(
+    networkSettingProvider.select((state) => state.routeMode),
   );
   final vpnSetting = ref.watch(vpnSettingProvider);
   final currentProfileName = currentProfileVM2.a;
   final selectedMap = currentProfileVM2.b;
   final onlyStatisticsProxy = appSettingVM3.a;
-  final crashlytics = appSettingVM3.b;
-  final testUrl = appSettingVM3.c;
-  final stack = clashConfigVM2.a;
-  final port = clashConfigVM2.b;
+  final testUrl = appSettingVM3.b;
+  final stack = clashConfigVM3.a;
+  final port = clashConfigVM3.b;
+  final mtu = clashConfigVM3.c;
+  final excludeSSIDs = ref.watch(excludeSSIDsProvider);
+  final alwaysOn = ref.watch(alwaysOnProvider);
   return SharedState(
     currentProfileName: currentProfileName,
     onlyStatisticsProxy: onlyStatisticsProxy,
-    stopText: currentAppLocalizations.stop,
-    crashlytics: crashlytics,
-    stopTip: currentAppLocalizations.stopVpn,
-    startTip: currentAppLocalizations.startVpn,
+    networkSpeedNotification: vpnSetting.networkSpeedNotification,
+    excludeSSIDs: excludeSSIDs,
+    alwaysOn: alwaysOn,
     setupParams: SetupParams(selectedMap: selectedMap, testUrl: testUrl),
     vpnOptions: VpnOptions(
       enable: vpnSetting.enable,
@@ -601,10 +639,21 @@ SharedState sharedState(Ref ref) {
       systemProxy: vpnSetting.systemProxy,
       port: port,
       ipv6: vpnSetting.ipv6,
-      dnsHijacking: vpnSetting.dnsHijacking,
+      captureDns: vpnSetting.captureDns,
       accessControlProps: vpnSetting.accessControlProps,
       allowBypass: vpnSetting.allowBypass,
+      suspendSupport: vpnSetting.suspendSupport,
       bypassDomain: bypassDomain,
+      mtu: mtu,
+      routeAddress: tun.getMobileRouteAddress(routeMode),
+      disableIcmpForwarding: tun.disableIcmpForwarding,
+      endpointIndependentNat: tun.endpointIndependentNat,
+      includeAllNetworks: vpnSetting.includeAllNetworks,
+      excludeLocalNetworks: vpnSetting.excludeLocalNetworks,
+      excludeAPNs: vpnSetting.excludeAPNs,
+      excludeCellularServices: vpnSetting.excludeCellularServices,
+      enforceRoutes: vpnSetting.enforceRoutes,
+      excludeDeviceCommunication: vpnSetting.excludeDeviceCommunication,
     ),
   );
 }

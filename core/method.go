@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"runtime"
 	"unsafe"
+
+	"github.com/metacubex/mihomo/component/age"
 )
 
 type MethodCall struct {
@@ -108,11 +110,18 @@ func handleMethodCall(call *MethodCall, response MethodResponse) {
 		response.success(handleShutdown())
 		return
 	case validateConfigMethod:
-		path := ""
-		if !decodeMethodArguments(call, response, &path) {
+		data := ""
+		if !decodeMethodArguments(call, response, &data) {
 			return
 		}
-		response.success(handleValidateConfig(path))
+		response.success(handleValidateConfig(data))
+		return
+	case decryptAgeConfigMethod:
+		params := DecryptAgeConfigParams{}
+		if !decodeMethodArguments(call, response, &params) {
+			return
+		}
+		response.success(handleDecryptAgeConfig(&params))
 		return
 	case updateConfigMethod:
 		params := UpdateParams{}
@@ -176,17 +185,44 @@ func handleMethodCall(call *MethodCall, response MethodResponse) {
 	case resetConnectionsMethod:
 		response.success(handleResetConnections())
 		return
-	case getConfigMethod:
-		path := ""
-		if !decodeMethodArguments(call, response, &path) {
+	case getProfileConfigMethod:
+		profileID := int64(0)
+		if !decodeMethodArguments(call, response, &profileID) {
 			return
 		}
-		config, err := handleGetConfig(path)
+		config, err := handleGetProfileConfig(profileID)
 		if err != nil {
 			response.failure("core_error", err.Error(), nil)
 			return
 		}
 		response.success(config)
+		return
+	case generateAgeKeyPairMethod:
+		secretKey, publicKey, err := age.GenX25519KeyPair()
+		if err != nil {
+			response.failure("core_error", err.Error(), nil)
+			return
+		}
+		response.success(map[string]string{
+			"secret-key": secretKey,
+			"public-key": publicKey,
+		})
+		return
+	case convertAgeSecretKeyToPublicKeyMethod:
+		secretKey := ""
+		if !decodeMethodArguments(call, response, &secretKey) {
+			return
+		}
+		publicKeys, err := age.ToPublicKeys(secretKey)
+		if err != nil {
+			response.failure("core_error", err.Error(), nil)
+			return
+		}
+		if len(publicKeys) == 0 {
+			response.failure("core_error", "no public keys found", nil)
+			return
+		}
+		response.success(publicKeys[0])
 		return
 	case closeConnectionMethod:
 		id := ""
@@ -204,6 +240,43 @@ func handleMethodCall(call *MethodCall, response MethodResponse) {
 			return
 		}
 		response.success(handleGetExternalProvider(externalProviderName))
+		return
+	case getOverlayNetworkStatusMethod:
+		params := GetOverlayNetworkStatusParams{}
+		if !decodeMethodArguments(call, response, &params) {
+			return
+		}
+		response.success(handleGetOverlayNetworkStatus(&params))
+		return
+	case activateOverlayNetworkMethod:
+		params := ActivateOverlayNetworkParams{}
+		if !decodeMethodArguments(call, response, &params) {
+			return
+		}
+		response.success(handleActivateOverlayNetwork(&params))
+		return
+	case pingTailscaleNodeMethod:
+		params := TailscalePingParams{}
+		if !decodeMethodArguments(call, response, &params) {
+			return
+		}
+		result, err := handlePingTailscaleNode(&params)
+		if err != nil {
+			response.failure("core_error", err.Error(), nil)
+			return
+		}
+		response.success(result)
+		return
+	case logoutTailscaleMethod:
+		params := TailscaleLogoutParams{}
+		if !decodeMethodArguments(call, response, &params) {
+			return
+		}
+		if err := handleLogoutTailscale(&params); err != nil {
+			response.failure("core_error", err.Error(), nil)
+			return
+		}
+		response.success(true)
 		return
 	case updateGeoDataMethod:
 		geoType := ""
@@ -233,12 +306,18 @@ func handleMethodCall(call *MethodCall, response MethodResponse) {
 			response.success(value)
 		})
 		return
-	case startLogMethod:
-		handleStartLog()
+	case startLogNotifyMethod:
+		response.success(handleStartLogNotify())
+		return
+	case stopLogNotifyMethod:
+		handleStopLogNotify()
 		response.success(true)
 		return
-	case stopLogMethod:
-		handleStopLog()
+	case startRequestNotifyMethod:
+		response.success(handleStartRequestNotify())
+		return
+	case stopRequestNotifyMethod:
+		handleStopRequestNotify()
 		response.success(true)
 		return
 	case startListenerMethod:
@@ -267,6 +346,18 @@ func handleMethodCall(call *MethodCall, response MethodResponse) {
 			return
 		}
 		handleClearEffect(profileId, response)
+		return
+	case getGoroutineCountMethod:
+		handleGetGoroutineCount(func(value int) {
+			response.success(value)
+		})
+		return
+	case deleteManagedPathMethod:
+		params := DeleteManagedPathParams{}
+		if !decodeMethodArguments(call, response, &params) {
+			return
+		}
+		response.success(handleDeleteManagedPath(&params))
 		return
 	default:
 		if !handlePlatformMethodCall(call, response) {
