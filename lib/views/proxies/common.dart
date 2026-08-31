@@ -1,14 +1,18 @@
-import 'package:fl_clash/common/common.dart';
-import 'package:fl_clash/core/core.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-double get listHeaderHeight {
+double getListHeaderHeight(ProxiesListHeaderStyle style) {
   final measure = globalState.measure;
-  return 20 + measure.titleMediumHeight + 4 + measure.bodyMediumHeight + 2;
+  return switch (style) {
+    ProxiesListHeaderStyle.loose =>
+      20 + measure.titleMediumHeight + 4 + measure.bodyMediumHeight + 2,
+    ProxiesListHeaderStyle.standard =>
+      18 + measure.titleSmallHeight + 3 + measure.labelSmallHeight + 3,
+    ProxiesListHeaderStyle.tight => 24 + measure.titleSmallHeight,
+  };
 }
 
 double getItemHeight(ProxyCardType proxyCardType) {
@@ -16,7 +20,7 @@ double getItemHeight(ProxyCardType proxyCardType) {
   final baseHeight =
       16 + measure.bodyMediumHeight * 2 + measure.bodySmallHeight + 8 + 4;
   return switch (proxyCardType) {
-    ProxyCardType.expand => baseHeight + measure.labelSmallHeight + 6,
+    ProxyCardType.standard => baseHeight + measure.labelSmallHeight + 6,
     ProxyCardType.shrink => baseHeight,
     ProxyCardType.min => baseHeight - measure.bodyMediumHeight,
   };
@@ -42,53 +46,22 @@ void updateCurrentUnfoldSet(Set<String> value) {
       .updateCurrentUnfoldSet(value);
 }
 
-Future<void> proxyDelayTest(Proxy proxy, [String? testUrl]) async {
-  final ref = globalState.container;
-  final groups = getGroups();
-  final selectedMap = ref.read(
-    currentProfileProvider.select((state) => state?.selectedMap ?? {}),
-  );
-  final state = computeRealSelectedProxyState(
-    proxy.name,
-    groups: groups,
-    selectedMap: selectedMap,
-  );
-  final currentTestUrl = state.testUrl.takeFirstValid([
-    ref.read(realTestUrlProvider(testUrl)),
-  ]);
-  if (state.proxyName.isEmpty) {
-    return;
-  }
-  ref
+Future<void> resetProxySelection(String groupName) async {
+  await globalState.container
       .read(proxiesActionProvider.notifier)
-      .setDelay(Delay(url: currentTestUrl, name: state.proxyName, value: 0));
-  try {
-    final delay = await coreController.getDelay(
-      currentTestUrl,
-      state.proxyName,
-    );
-    ref.read(proxiesActionProvider.notifier).setDelay(delay);
-  } catch (error) {
-    commonPrint.log(
-      'Delay test failed for ${state.proxyName}: $error',
-      logLevel: coreFailureLogLevel(error),
-    );
-    ref
-        .read(proxiesActionProvider.notifier)
-        .setDelay(Delay(url: currentTestUrl, name: state.proxyName, value: -1));
-  }
+      .resetProxySelection(groupName);
+}
+
+Future<void> proxyDelayTest(Proxy proxy, [String? testUrl]) async {
+  await globalState.container
+      .read(proxiesActionProvider.notifier)
+      .testProxyDelay(proxy, testUrl);
 }
 
 Future<void> delayTest(List<Proxy> proxies, [String? testUrl]) async {
-  final batches = proxies.batch(maxConcurrentDelayTests);
-  for (final batch in batches) {
-    await Future.wait(
-      batch.map((proxy) async {
-        await proxyDelayTest(proxy, testUrl);
-      }),
-    );
-  }
-  globalState.container.read(sortNumProvider.notifier).add();
+  await globalState.container
+      .read(proxiesActionProvider.notifier)
+      .testProxyDelays(proxies, testUrl);
 }
 
 double getScrollToSelectedOffset({

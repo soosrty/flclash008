@@ -39,31 +39,28 @@ class ProxyCard extends StatelessWidget {
             delayProvider(proxyName: proxy.name, testUrl: testUrl),
           );
           return FadeThroughBox(
-            alignment: type == ProxyCardType.expand
+            alignment: type == ProxyCardType.standard
                 ? Alignment.centerLeft
                 : Alignment.centerRight,
-            child: delay == 0 || delay == null
+            child: delay == 0
                 ? SizedBox(
                     height: measure.labelSmallHeight,
                     width: measure.labelSmallHeight,
-                    child: delay == 0
-                        ? const CommonCircleLoading()
-                        : IconButton(
-                            icon: const Icon(Icons.bolt),
-                            iconSize: globalState.measure.labelSmallHeight,
-                            padding: EdgeInsets.zero,
-                            onPressed: _handleTestCurrentDelay,
-                          ),
+                    child: const CommonCircleLoading(),
                   )
                 : GestureDetector(
                     onTap: _handleTestCurrentDelay,
-                    child: Text(
-                      delay > 0 ? '$delay ms' : 'Timeout',
-                      style: context.textTheme.labelSmall?.copyWith(
-                        overflow: TextOverflow.ellipsis,
-                        color: utils.getDelayColor(delay),
-                      ),
-                    ),
+                    child: delay == null
+                        ? Icon(Icons.bolt, size: measure.labelSmallHeight)
+                        : Text(
+                            delay > 0
+                                ? '$delay ms'
+                                : context.appLocalizations.timeout,
+                            style: context.textTheme.labelSmall?.copyWith(
+                              overflow: TextOverflow.ellipsis,
+                              color: utils.getDelayColor(delay),
+                            ),
+                          ),
                   ),
           );
         },
@@ -95,7 +92,7 @@ class ProxyCard extends StatelessWidget {
     }
   }
 
-  Future<void> _changeProxy(WidgetRef ref) async {
+  Future<void> _changeProxy(BuildContext context) async {
     final isComputedSelected = groupType.isComputedSelected;
     final isSelector = groupType == GroupType.Selector;
     final ref = globalState.container;
@@ -113,7 +110,7 @@ class ProxyCard extends StatelessWidget {
           .changeProxyDebounce(groupName, nextProxyName);
       return;
     }
-    globalState.showNotifier(currentAppLocalizations.notSelectedTip);
+    context.showSnackBar(currentAppLocalizations.notSelectedTip);
   }
 
   @override
@@ -130,8 +127,9 @@ class ProxyCard extends StatelessWidget {
             );
             return CommonCard(
               key: key,
+              onLongPress: _handleTestCurrentDelay,
               onPressed: () {
-                _changeProxy(ref);
+                _changeProxy(context);
               },
               isSelected: selectedProxyName == proxy.name,
               child: child!,
@@ -146,7 +144,7 @@ class ProxyCard extends StatelessWidget {
               children: [
                 proxyNameText,
                 const SizedBox(height: 8),
-                if (type == ProxyCardType.expand) ...[
+                if (type == ProxyCardType.standard) ...[
                   SizedBox(
                     height: measure.bodySmallHeight,
                     child: _ProxyDesc(proxy: proxy),
