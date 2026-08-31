@@ -8,26 +8,29 @@ import 'package:fl_clash/providers/providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class AndroidManager extends ConsumerStatefulWidget {
+class MobileManager extends ConsumerStatefulWidget {
   final Widget child;
 
-  const AndroidManager({super.key, required this.child});
+  const MobileManager({super.key, required this.child});
 
   @override
-  ConsumerState<AndroidManager> createState() => _AndroidContainerState();
+  ConsumerState<MobileManager> createState() => _MobileManagerState();
 }
 
-class _AndroidContainerState extends ConsumerState<AndroidManager>
+class _MobileManagerState extends ConsumerState<MobileManager>
     with ServiceListener {
   @override
   void initState() {
     super.initState();
-    ref.listenManual(appSettingProvider.select((state) => state.hidden), (
-      prev,
-      next,
-    ) {
-      app?.updateExcludeFromRecents(next);
-    }, fireImmediately: true);
+    if (system.isAndroid) {
+      // hidden from recents
+      ref.listenManual(appSettingProvider.select((state) => state.hidden), (
+        prev,
+        next,
+      ) {
+        app?.updateExcludeFromRecents(next);
+      }, fireImmediately: true);
+    }
     ref.listenManual(sharedStateProvider, (prev, next) {
       if (prev != next) {
         debouncer.call(FunctionTag.saveSharedFile, () async {
@@ -42,7 +45,7 @@ class _AndroidContainerState extends ConsumerState<AndroidManager>
   }
 
   @override
-  Future<void> dispose() async {
+  void dispose() {
     service?.removeListener(this);
     super.dispose();
   }
