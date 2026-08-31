@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/models/models.dart';
@@ -11,6 +13,18 @@ const _defaultUaValue = '';
 const _customUaValue = '__custom_ua__';
 const _presetUas = ['clash-verge/v2.4.2', 'ClashforWindows/0.19.23'];
 
+List<String> _parseHostsValue(String value) {
+  return value.splitByMultipleSeparatorsList;
+}
+
+String _serializeHostsValue(List<String> values) {
+  return values.join(',');
+}
+
+Widget _buildHostsSubtitle(MapEntry<String, String> item) {
+  return Text(_parseHostsValue(item.value).join('\n'));
+}
+
 class LogLevelItem extends ConsumerWidget {
   const LogLevelItem({super.key});
 
@@ -23,7 +37,7 @@ class LogLevelItem extends ConsumerWidget {
     return ListItem<LogLevel>.options(
       leading: const Icon(Icons.info_outline),
       title: Text(appLocalizations.logLevel),
-      subtitle: Text(logLevel.name),
+      subtitle: Text(logLevel.name.toUpperCase()),
       dialogTitle: appLocalizations.logLevel,
       options: LogLevel.values,
       onChanged: (LogLevel? value) {
@@ -34,7 +48,7 @@ class LogLevelItem extends ConsumerWidget {
             .read(patchClashConfigProvider.notifier)
             .update((state) => state.copyWith(logLevel: value));
       },
-      textBuilder: (logLevel) => logLevel.name,
+      textBuilder: (logLevel) => logLevel.name.toUpperCase(),
       value: logLevel,
     );
   }
@@ -377,10 +391,13 @@ class HostsItem extends ConsumerWidget {
       widget: MapInputPage(
         title: 'Hosts',
         map: hosts,
+        keyLabel: appLocalizations.domain,
         keyMaxLength: TextInputLimits.domain,
         valueMaxLength: TextInputLimits.hostValue,
+        valueParser: _parseHostsValue,
+        valueSerializer: _serializeHostsValue,
         titleBuilder: (item) => Text(item.key),
-        subtitleBuilder: (item) => Text(item.value),
+        subtitleBuilder: _buildHostsSubtitle,
       ),
       onChanged: (value) {
         ref
@@ -570,33 +587,61 @@ class GeodataLoaderItem extends ConsumerWidget {
   }
 }
 
-class ExternalControllerItem extends ConsumerWidget {
-  const ExternalControllerItem({super.key});
+class GeositeMatcherItem extends ConsumerWidget {
+  const GeositeMatcherItem({super.key});
 
   @override
   Widget build(BuildContext context, ref) {
     final appLocalizations = context.appLocalizations;
-    final hasExternalController = ref.watch(
+    final isMph = ref.watch(
       patchClashConfigProvider.select(
-        (state) => state.externalController == ExternalControllerStatus.open,
+        (state) => state.geositeMatcher == GeositeMatcher.mph,
       ),
     );
     return ListItem.toggle(
-      leading: const Icon(Icons.api_outlined),
-      title: Text(appLocalizations.externalController),
-      subtitle: Text(appLocalizations.externalControllerDesc),
-      value: hasExternalController,
+      leading: const Icon(Icons.travel_explore),
+      title: Text(appLocalizations.geositeMatcher),
+      subtitle: Text(appLocalizations.geositeMatcherDesc),
+      value: isMph,
       onChanged: (bool value) async {
         ref
             .read(patchClashConfigProvider.notifier)
             .update(
               (state) => state.copyWith(
-                externalController: value
-                    ? ExternalControllerStatus.open
-                    : ExternalControllerStatus.close,
+                geositeMatcher: value
+                    ? GeositeMatcher.mph
+                    : GeositeMatcher.succinct,
               ),
             );
       },
+    );
+  }
+}
+
+class ExternalControllerItem extends ConsumerWidget {
+  const ExternalControllerItem({super.key});
+
+  Future<void> _handleShowDialog() async {
+    await globalState.showCommonDialog(
+      child: const _ExternalControllerDialog(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, ref) {
+    final appLocalizations = context.appLocalizations;
+    final externalController = ref.watch(
+      patchClashConfigProvider.select((state) => state.externalController),
+    );
+    return ListItem(
+      leading: const Icon(Icons.api_outlined),
+      title: Text(appLocalizations.externalController),
+      subtitle: Text(
+        externalController.isNotEmpty
+            ? externalController
+            : appLocalizations.externalControllerDesc,
+      ),
+      onTap: _handleShowDialog,
     );
   }
 }
@@ -608,6 +653,7 @@ final generalItems = <Widget>[
   const TestUrlItem(),
   const PortItem(),
   const HostsItem(),
+  const ExternalControllerItem(),
   const Ipv6Item(),
   const AllowLanItem(),
   const UnifiedDelayItem(),
@@ -615,8 +661,192 @@ final generalItems = <Widget>[
   const FindProcessItem(),
   const TcpConcurrentItem(),
   const GeodataLoaderItem(),
-  const ExternalControllerItem(),
+  if (!system.isIOS) const GeositeMatcherItem(),
 ].separated(const Divider(height: 0)).toList();
+
+class _ExternalControllerDialog extends ConsumerStatefulWidget {
+  const _ExternalControllerDialog();
+
+  @override
+  ConsumerState<_ExternalControllerDialog> createState() =>
+      _ExternalControllerDialogState();
+}
+
+class _ExternalControllerDialogState
+    extends ConsumerState<_ExternalControllerDialog> {
+  static const _secretCharacters =
+      'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _portController;
+  late final TextEditingController _secretController;
+  late bool _enabled;
+  late bool _allowLan;
+
+  @override
+  void initState() {
+    super.initState();
+    final config = ref.read(patchClashConfigProvider);
+    final externalController = config.externalController;
+    _enabled = externalController.isNotEmpty;
+    _allowLan = _enabled && !externalController.startsWith('$localhost:');
+    final port = int.tryParse(externalController.split(':').last);
+    _portController = TextEditingController(
+      text: (port ?? defaultExternalControllerPort).toString(),
+    );
+    _secretController = TextEditingController(text: config.secret);
+  }
+
+  void _handleRandomSecret() {
+    final random = Random.secure();
+    _secretController.text = List.generate(
+      16,
+      (_) => _secretCharacters[random.nextInt(_secretCharacters.length)],
+    ).join();
+  }
+
+  void _handleSubmit() {
+    if (_formKey.currentState?.validate() == false) {
+      return;
+    }
+    ref
+        .read(patchClashConfigProvider.notifier)
+        .update(
+          (state) => state.copyWith(
+            externalController: _enabled
+                ? '${_allowLan ? '0.0.0.0' : localhost}:${_portController.text}'
+                : '',
+            secret: _secretController.text,
+          ),
+        );
+    Navigator.of(context).pop();
+  }
+
+  @override
+  void dispose() {
+    _portController.dispose();
+    _secretController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appLocalizations = context.appLocalizations;
+    return CommonDialog(
+      title: appLocalizations.externalController,
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.of(context).pop();
+          },
+          child: Text(appLocalizations.cancel),
+        ),
+        TextButton(
+          onPressed: _handleSubmit,
+          child: Text(appLocalizations.submit),
+        ),
+      ],
+      child: Form(
+        key: _formKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          spacing: 16,
+          children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(appLocalizations.enableExternalController),
+              value: _enabled,
+              onChanged: (value) {
+                setState(() {
+                  _enabled = value;
+                });
+              },
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(appLocalizations.allowLanAccess),
+              subtitle: Text(appLocalizations.allowLanAccessDesc),
+              value: _allowLan,
+              onChanged: !_enabled
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _allowLan = value;
+                      });
+                    },
+            ),
+            TextFormField(
+              enabled: _enabled,
+              keyboardType: TextInputType.number,
+              maxLines: 1,
+              minLines: 1,
+              inputFormatters: TextInputLimits.digitsOnly(TextInputLimits.port),
+              controller: _portController,
+              onFieldSubmitted: (_) {
+                _handleSubmit();
+              },
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                labelText: appLocalizations.listeningPort,
+              ),
+              validator: (value) {
+                if (!_enabled) {
+                  return null;
+                }
+                if (value == null || value.isEmpty) {
+                  return appLocalizations.emptyTip(
+                    appLocalizations.listeningPort,
+                  );
+                }
+                final port = int.tryParse(value);
+                if (port == null) {
+                  return appLocalizations.numberTip(
+                    appLocalizations.listeningPort,
+                  );
+                }
+                if (port < 1024 || port > 49151) {
+                  return appLocalizations.portTip(
+                    appLocalizations.listeningPort,
+                  );
+                }
+                return null;
+              },
+            ),
+            TextFormField(
+              enabled: _enabled,
+              maxLines: 1,
+              minLines: 1,
+              inputFormatters: TextInputLimits.limit(TextInputLimits.password),
+              controller: _secretController,
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                labelText: appLocalizations.password,
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: appLocalizations.random,
+                      onPressed: _handleRandomSecret,
+                      icon: const Icon(Icons.casino_outlined),
+                    ),
+                    IconButton(
+                      tooltip: appLocalizations.copy,
+                      onPressed: () {
+                        copyText(context, _secretController.text);
+                      },
+                      icon: const Icon(Icons.copy_outlined),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _PortDialog extends ConsumerStatefulWidget {
   const _PortDialog();
@@ -778,6 +1008,9 @@ class _PortDialogState extends ConsumerState<_PortDialog> {
                       return appLocalizations.numberTip(
                         appLocalizations.mixedPort,
                       );
+                    }
+                    if (port == 0) {
+                      return null;
                     }
                     if (port < 1024 || port > 49151) {
                       return appLocalizations.portTip(

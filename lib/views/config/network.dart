@@ -1,10 +1,55 @@
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/enum/enum.dart';
+import 'package:fl_clash/models/clash_config.dart';
+import 'package:fl_clash/models/config.dart';
+import 'package:fl_clash/providers/app.dart';
 import 'package:fl_clash/providers/config.dart';
+import 'package:fl_clash/state.dart';
 import 'package:fl_clash/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+
+class NetworkResetButton extends ConsumerWidget {
+  const NetworkResetButton({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appLocalizations = context.appLocalizations;
+    return IconButton(
+      onPressed: () async {
+        final confirmed = await globalState.showMessage(
+          context: context,
+          title: appLocalizations.reset,
+          message: TextSpan(text: appLocalizations.resetTip),
+        );
+        if (confirmed != true || !context.mounted) {
+          return;
+        }
+        ref
+            .read(networkSettingProvider.notifier)
+            .update(
+              (state) => defaultNetworkProps.copyWith(
+                appendSystemDns: state.appendSystemDns,
+              ),
+            );
+        ref
+            .read(vpnSettingProvider.notifier)
+            .update(
+              (state) => defaultVpnProps.copyWith(
+                networkSpeedNotification: state.networkSpeedNotification,
+                accessControlProps: state.accessControlProps,
+              ),
+            );
+        ref
+            .read(patchClashConfigProvider.notifier)
+            .update((state) => state.copyWith(tun: defaultTun));
+      },
+      tooltip: appLocalizations.reset,
+      icon: const Icon(Icons.replay),
+    );
+  }
+}
 
 class VPNItem extends ConsumerWidget {
   const VPNItem({super.key});
@@ -149,11 +194,114 @@ class AutoSetSystemDnsItem extends ConsumerWidget {
     );
     return ListItem.toggle(
       title: Text(appLocalizations.autoSetSystemDns),
+      subtitle: Text(appLocalizations.autoSetSystemDnsDesc),
       value: autoSetSystemDns,
       onChanged: (bool value) async {
         ref
             .read(networkSettingProvider.notifier)
             .update((state) => state.copyWith(autoSetSystemDns: value));
+      },
+    );
+  }
+}
+
+class StrictRouteItem extends ConsumerWidget {
+  const StrictRouteItem({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appLocalizations = context.appLocalizations;
+    final strictRoute = ref.watch(
+      patchClashConfigProvider.select((state) => state.tun.strictRoute),
+    );
+    return ListItem.toggle(
+      title: Text(appLocalizations.strictRoute),
+      subtitle: Text(appLocalizations.strictRouteDesc),
+      value: strictRoute,
+      onChanged: (value) {
+        ref
+            .read(patchClashConfigProvider.notifier)
+            .update((state) => state.copyWith.tun(strictRoute: value));
+      },
+    );
+  }
+}
+
+class IcmpForwardingItem extends ConsumerWidget {
+  const IcmpForwardingItem({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appLocalizations = context.appLocalizations;
+    final icmpForwarding = ref.watch(
+      patchClashConfigProvider.select(
+        (state) => !state.tun.disableIcmpForwarding,
+      ),
+    );
+    return ListItem.toggle(
+      title: Text(appLocalizations.icmpForwarding),
+      subtitle: Text(appLocalizations.icmpForwardingDesc),
+      value: icmpForwarding,
+      onChanged: (value) {
+        ref
+            .read(patchClashConfigProvider.notifier)
+            .update(
+              (state) => state.copyWith.tun(disableIcmpForwarding: !value),
+            );
+      },
+    );
+  }
+}
+
+class DnsHijackItem extends ConsumerWidget {
+  const DnsHijackItem({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appLocalizations = context.appLocalizations;
+    final dnsHijack = ref.watch(
+      patchClashConfigProvider.select(
+        (state) => state.tun.dnsHijack.isNotEmpty,
+      ),
+    );
+    return ListItem.toggle(
+      title: Text(appLocalizations.dnsHijack),
+      subtitle: Text(appLocalizations.dnsHijackDesc),
+      value: dnsHijack,
+      onChanged: (value) {
+        ref
+            .read(patchClashConfigProvider.notifier)
+            .update(
+              (state) => state.copyWith.tun(
+                dnsHijack: value ? ['any:53', 'tcp://any:53'] : [],
+              ),
+            );
+      },
+    );
+  }
+}
+
+class EndpointIndependentNatItem extends ConsumerWidget {
+  const EndpointIndependentNatItem({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appLocalizations = context.appLocalizations;
+    final endpointIndependentNat = ref.watch(
+      patchClashConfigProvider.select(
+        (state) => state.tun.endpointIndependentNat,
+      ),
+    );
+    return ListItem.toggle(
+      title: Text(appLocalizations.endpointIndependentNat),
+      subtitle: Text(appLocalizations.endpointIndependentNatDesc),
+      value: endpointIndependentNat,
+      onChanged: (value) {
+        ref
+            .read(patchClashConfigProvider.notifier)
+            .update(
+              (state) => state.copyWith.tun(endpointIndependentNat: value),
+            );
       },
     );
   }
@@ -188,6 +336,44 @@ class TunStackItem extends ConsumerWidget {
   }
 }
 
+class TunMtuItem extends ConsumerWidget {
+  const TunMtuItem({super.key});
+
+  @override
+  Widget build(BuildContext context, ref) {
+    final appLocalizations = context.appLocalizations;
+    final mtu = ref.watch(
+      patchClashConfigProvider.select((state) => state.tun.mtu),
+    );
+
+    return ListItem.input(
+      title: Text(appLocalizations.mtu),
+      subtitle: Text('$mtu'),
+      dialogTitle: appLocalizations.mtu,
+      value: '$mtu',
+      resetValue: '$defaultTunMtu',
+      maxLength: TextInputLimits.number,
+      keyboardType: TextInputType.number,
+      validator: (String? value) {
+        final intValue = int.tryParse(value ?? '');
+        if (intValue == null || intValue <= 0 || intValue > 65535) {
+          return appLocalizations.mtuRangeTip;
+        }
+        return null;
+      },
+      onChanged: (String? value) {
+        final mtu = int.tryParse(value ?? '');
+        if (mtu == null) {
+          return;
+        }
+        ref
+            .read(patchClashConfigProvider.notifier)
+            .update((state) => state.copyWith.tun(mtu: mtu));
+      },
+    );
+  }
+}
+
 class BypassDomainItem extends ConsumerWidget {
   const BypassDomainItem({super.key});
 
@@ -216,22 +402,45 @@ class BypassDomainItem extends ConsumerWidget {
   }
 }
 
-class DNSHijackingItem extends ConsumerWidget {
-  const DNSHijackingItem({super.key});
+class CaptureDnsItem extends ConsumerWidget {
+  const CaptureDnsItem({super.key});
 
   @override
   Widget build(BuildContext context, ref) {
     final appLocalizations = context.appLocalizations;
-    final dnsHijacking = ref.watch(
-      vpnSettingProvider.select((state) => state.dnsHijacking),
+    final captureDns = ref.watch(
+      vpnSettingProvider.select((state) => state.captureDns),
     );
     return ListItem<RouteMode>.toggle(
-      title: Text(appLocalizations.dnsHijacking),
-      value: dnsHijacking,
+      title: Text(appLocalizations.captureDns),
+      subtitle: Text(appLocalizations.captureDnsDesc),
+      value: captureDns,
       onChanged: (value) async {
         ref
             .read(vpnSettingProvider.notifier)
-            .update((state) => state.copyWith(dnsHijacking: value));
+            .update((state) => state.copyWith(captureDns: value));
+      },
+    );
+  }
+}
+
+class SuspendSupportItem extends ConsumerWidget {
+  const SuspendSupportItem({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appLocalizations = context.appLocalizations;
+    final suspendSupport = ref.watch(
+      vpnSettingProvider.select((state) => state.suspendSupport),
+    );
+    return ListItem.toggle(
+      title: Text(appLocalizations.suspendSupport),
+      subtitle: Text(appLocalizations.suspendSupportDesc),
+      value: suspendSupport,
+      onChanged: (bool value) async {
+        ref
+            .read(vpnSettingProvider.notifier)
+            .update((state) => state.copyWith(suspendSupport: value));
       },
     );
   }
@@ -304,15 +513,150 @@ class RouteAddressItem extends ConsumerWidget {
   }
 }
 
-class NetworkListView extends StatelessWidget {
+class IncludeAllNetworksItem extends ConsumerWidget {
+  const IncludeAllNetworksItem({super.key});
+
+  @override
+  Widget build(BuildContext context, ref) {
+    final appLocalizations = context.appLocalizations;
+    final includeAllNetworks = ref.watch(
+      vpnSettingProvider.select((state) => state.includeAllNetworks),
+    );
+    return ListItem.toggle(
+      title: Text(appLocalizations.includeAllNetworks),
+      subtitle: Text(appLocalizations.includeAllNetworksDesc),
+      value: includeAllNetworks,
+      onChanged: (bool value) async {
+        ref
+            .read(vpnSettingProvider.notifier)
+            .update((state) => state.copyWith(includeAllNetworks: value));
+      },
+    );
+  }
+}
+
+class ExcludeLocalNetworksItem extends ConsumerWidget {
+  const ExcludeLocalNetworksItem({super.key});
+
+  @override
+  Widget build(BuildContext context, ref) {
+    final appLocalizations = context.appLocalizations;
+    final excludeLocalNetworks = ref.watch(
+      vpnSettingProvider.select((state) => state.excludeLocalNetworks),
+    );
+    return ListItem.toggle(
+      title: Text(appLocalizations.excludeLocalNetworks),
+      subtitle: Text(appLocalizations.excludeLocalNetworksDesc),
+      value: excludeLocalNetworks,
+      onChanged: (bool value) async {
+        ref
+            .read(vpnSettingProvider.notifier)
+            .update((state) => state.copyWith(excludeLocalNetworks: value));
+      },
+    );
+  }
+}
+
+class ExcludeAPNsItem extends ConsumerWidget {
+  const ExcludeAPNsItem({super.key});
+
+  @override
+  Widget build(BuildContext context, ref) {
+    final appLocalizations = context.appLocalizations;
+    final excludeAPNs = ref.watch(
+      vpnSettingProvider.select((state) => state.excludeAPNs),
+    );
+    return ListItem.toggle(
+      title: Text(appLocalizations.excludeAPNs),
+      subtitle: Text(appLocalizations.excludeAPNsDesc),
+      value: excludeAPNs,
+      onChanged: (bool value) async {
+        ref
+            .read(vpnSettingProvider.notifier)
+            .update((state) => state.copyWith(excludeAPNs: value));
+      },
+    );
+  }
+}
+
+class ExcludeCellularServicesItem extends ConsumerWidget {
+  const ExcludeCellularServicesItem({super.key});
+
+  @override
+  Widget build(BuildContext context, ref) {
+    final appLocalizations = context.appLocalizations;
+    final excludeCellularServices = ref.watch(
+      vpnSettingProvider.select((state) => state.excludeCellularServices),
+    );
+    return ListItem.toggle(
+      title: Text(appLocalizations.excludeCellularServices),
+      subtitle: Text(appLocalizations.excludeCellularServicesDesc),
+      value: excludeCellularServices,
+      onChanged: (bool value) async {
+        ref
+            .read(vpnSettingProvider.notifier)
+            .update((state) => state.copyWith(excludeCellularServices: value));
+      },
+    );
+  }
+}
+
+class EnforceRoutesItem extends ConsumerWidget {
+  const EnforceRoutesItem({super.key});
+
+  @override
+  Widget build(BuildContext context, ref) {
+    final appLocalizations = context.appLocalizations;
+    final enforceRoutes = ref.watch(
+      vpnSettingProvider.select((state) => state.enforceRoutes),
+    );
+    return ListItem.toggle(
+      title: Text(appLocalizations.enforceRoutes),
+      subtitle: Text(appLocalizations.enforceRoutesDesc),
+      value: enforceRoutes,
+      onChanged: (bool value) async {
+        ref
+            .read(vpnSettingProvider.notifier)
+            .update((state) => state.copyWith(enforceRoutes: value));
+      },
+    );
+  }
+}
+
+class ExcludeDeviceCommunicationItem extends ConsumerWidget {
+  const ExcludeDeviceCommunicationItem({super.key});
+
+  @override
+  Widget build(BuildContext context, ref) {
+    final appLocalizations = context.appLocalizations;
+    final excludeDeviceCommunication = ref.watch(
+      vpnSettingProvider.select((state) => state.excludeDeviceCommunication),
+    );
+    return ListItem.toggle(
+      title: Text(appLocalizations.excludeDeviceCommunication),
+      subtitle: Text(appLocalizations.excludeDeviceCommunicationDesc),
+      value: excludeDeviceCommunication,
+      onChanged: (bool value) async {
+        ref
+            .read(vpnSettingProvider.notifier)
+            .update(
+              (state) => state.copyWith(excludeDeviceCommunication: value),
+            );
+      },
+    );
+  }
+}
+
+class NetworkListView extends ConsumerWidget {
   const NetworkListView({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final appLocalizations = context.appLocalizations;
+    final version = ref.watch(versionProvider);
     return generateListView([
       if (system.isAndroid) const VPNItem(),
-      if (system.isAndroid)
+      if (system.isMobile)
         ...generateSection(
           title: 'VPN',
           items: [
@@ -320,7 +664,8 @@ class NetworkListView extends StatelessWidget {
             const BypassDomainItem(),
             const AllowBypassItem(),
             const Ipv6Item(),
-            const DNSHijackingItem(),
+            const CaptureDnsItem(),
+            if (system.isAndroid) const SuspendSupportItem(),
           ],
         ),
       if (system.isDesktop)
@@ -333,13 +678,32 @@ class NetworkListView extends StatelessWidget {
         items: [
           if (system.isDesktop) const TUNItem(),
           if (system.isMacOS) const AutoSetSystemDnsItem(),
-          const TunStackItem(),
-          if (!system.isDesktop) ...[
+          if (system.isDesktop) const StrictRouteItem(),
+          const IcmpForwardingItem(),
+          if (system.isDesktop) const DnsHijackItem(),
+          const EndpointIndependentNatItem(),
+          if (!system.isIOS) const TunStackItem(),
+          const TunMtuItem(),
+          if (system.isMobile) ...[
             const RouteModeItem(),
             const RouteAddressItem(),
           ],
         ],
       ),
+      if (system.isIOS)
+        ...generateSection(
+          title: appLocalizations.networkExtension,
+          items: [
+            const IncludeAllNetworksItem(),
+            const EnforceRoutesItem(),
+            const ExcludeLocalNetworksItem(),
+            if (version >= 16) ...[
+              const ExcludeAPNsItem(),
+              const ExcludeCellularServicesItem(),
+            ],
+            if (version >= 17) const ExcludeDeviceCommunicationItem(),
+          ],
+        ),
     ]);
   }
 }
