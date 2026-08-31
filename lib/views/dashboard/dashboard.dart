@@ -46,6 +46,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
   }
 
   List<Widget> _buildActions(bool isEdit) {
+    final appLocalizations = context.appLocalizations;
     return [
       if (!isEdit && coreLib == null) const CoreStatusButton(),
       if (isEdit)
@@ -58,6 +59,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
             return child!;
           },
           child: IconButton(
+            tooltip: appLocalizations.add,
             onPressed: () {
               _showAddWidgetsModal();
             },
@@ -68,11 +70,13 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
         child: isEdit
             ? IconButton(
                 key: const ValueKey(true),
+                tooltip: appLocalizations.save,
                 icon: const Icon(Icons.save, key: ValueKey('save-icon')),
                 onPressed: _handleSaveAndExit,
               )
             : IconButton(
                 key: const ValueKey(false),
+                tooltip: appLocalizations.edit,
                 icon: const Icon(Icons.edit, key: ValueKey('edit-icon')),
                 onPressed: _handleEnterEdit,
               ),
@@ -181,6 +185,9 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
           .map((item) => item.widget),
     ];
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
       _addedWidgetsNotifier.value = DashboardWidget.values
           .where(
             (item) =>
@@ -206,7 +213,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
                 child: LayoutBuilder(
                   builder: (_, constraints) {
                     final columns = min(
-                      max(4 * ((constraints.maxWidth / 280).ceil()), 8),
+                      max(4 * ((constraints.maxWidth / 280).floor() + 1), 8),
                       _maxCrossAxisCount,
                     );
                     return isEdit

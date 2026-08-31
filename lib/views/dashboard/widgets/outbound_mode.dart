@@ -74,6 +74,7 @@ class OutboundMode extends StatelessWidget {
                                 _handleChangeMode(item);
                               },
                               value: item,
+                              excludeFocus: true,
                               title: Text(
                                 Intl.message(item.name),
                                 style: Theme.of(
