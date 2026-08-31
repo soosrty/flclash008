@@ -59,6 +59,8 @@ docs/
 /android/core/**/includes/
 /android/core/**/cmake-build-*/
 /android/core/**/jniLibs/
+.gradle/
+problems-report.html
 
 #FlClash
 /libclash/
@@ -69,10 +71,14 @@ docs/
 /env.json
 /core_sha256.json
 /core/*.exe
+/assets/data/
 /plugins/rust_api/.claude/
+/ios/Flutter/GeneratedBundleConfig.xcconfig
 devtools_options.yaml
 
 # FVM Version Cache
 .fvm/
 .fvmrc
 /coverage/lcov.info
+# Widget Preview related
+.widget_preview/
