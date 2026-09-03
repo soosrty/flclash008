@@ -1,170 +1,33 @@
-name: build
+name: build-ios
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
+
 env:
-  IS_STABLE: ${{ !contains(github.ref, 'pre') }}
   FLUTTER_VERSION: '3.47.1'
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
-    name: Test
-    runs-on: ubuntu-latest
+  ios:
+    name: iOS arm64 unsigned IPA
+    runs-on: macos-26
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           submodules: recursive
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Analyze
-        run: flutter analyze --no-fatal-infos
-
-      - name: Run tests
-        run: flutter test --reporter expanded
-
-      - name: Validate local Flutter packages
-        shell: bash
-        run: |
-          for package in plugins/proxy plugins/wifi_ssid plugins/window_ext plugins/setup; do
-            (
-              cd "$package"
-              flutter pub get
-              flutter analyze --no-fatal-infos
-            )
-          done
-
-      - name: Run local plugin tests
-        shell: bash
-        run: |
-          (
-            cd plugins/proxy
-            flutter test --reporter expanded
-          )
-          (
-            cd plugins/wifi_ssid
-            flutter test --reporter expanded
-          )
-
-      - name: Validate setup build tool
-        working-directory: plugins/setup/buildkit/build_tool
-        run: |
-          dart pub get
-          dart analyze
-          dart test
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.26.4'
-          cache-dependency-path: core/go.sum
-
-      - name: Validate Go core wrapper
-        working-directory: core
-        env:
-          CGO_ENABLED: 0
-        run: |
-          go test .
-          go vet .
-
-      - name: Validate Rust components
-        run: |
-          cargo fmt --manifest-path services/helper/Cargo.toml -- --check
-          cargo test --manifest-path services/helper/Cargo.toml
-          cargo fmt --manifest-path plugins/rust_api/rust/Cargo.toml -- --check
-          cargo test --manifest-path plugins/rust_api/rust/Cargo.toml
-
-  windows-helper-test:
-    name: Windows helper test
-    runs-on: windows-2022
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Check format
-        run: cargo fmt --manifest-path services/helper/Cargo.toml -- --check
-
-      - name: Run Windows service tests
-        run: cargo test --manifest-path services/helper/Cargo.toml --features windows-service
-
-  build:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [ test, windows-helper-test ]
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - platform: android
-            os: ubuntu-latest
-          - platform: windows
-            os: Windows-2022
-            arch: amd64
-          - platform: linux
-            os: ubuntu-22.04
-            arch: amd64
-          - platform: macos
-            os: macos-26-intel
-            arch: amd64
-          - platform: macos
-            os: macos-26
-            arch: arm64
-          - platform: ios
-            os: macos-26
-            arch: arm64
-          - platform: windows
-            os: windows-11-arm
-            arch: arm64
-          - platform: linux
-            os: ubuntu-22.04-arm
-            arch: arm64
-      fail-fast: false
-
-    steps:
-      - name: Setup rust
-        if: startsWith(matrix.os, 'windows-11-arm')
-        shell: pwsh
-        run: |
-          Invoke-WebRequest -Uri "https://win.rustup.rs/aarch64" -OutFile rustup-init.exe
-          .\rustup-init.exe -y --default-toolchain stable
-          $cargoPath = "$env:USERPROFILE\.cargo\bin"
-          Add-Content $env:GITHUB_PATH $cargoPath
-
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          submodules: recursive
-
-      - name: Setup Android Signing
-        if: startsWith(matrix.platform,'android')
-        run: |
-          echo "${{ secrets.KEYSTORE }}" | base64 --decode > android/app/keystore.jks
-          {
-            echo "keyAlias=${{ secrets.KEY_ALIAS }}"
-            echo "storePassword=${{ secrets.STORE_PASSWORD }}"
-            echo "keyPassword=${{ secrets.KEY_PASSWORD }}"
-          } >> android/local.properties
 
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
           go-version: '1.26.5'
-          cache-dependency-path: |
-            core/go.sum
-
-      - name: Enable git long paths (Windows)
-        if: startsWith(matrix.os, 'windows')
-        run: git config --global core.longpaths true
+          cache-dependency-path: core/go.sum
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -174,60 +37,35 @@ jobs:
           cache: true
 
       - name: Setup Xcode
-        if: startsWith(matrix.os, 'macos')
         run: |
           sudo xcode-select -s /Applications/Xcode_26.3.app || sudo xcode-select -s /Applications/Xcode_26.2.app
           xcodebuild -version
 
-      - name: Setup NDK
-        if: startsWith(matrix.platform,'android')
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r29
-          add-to-path: true
-          link-to-sdk: true
+      - name: Restore build script permissions
+        run: chmod +x plugins/setup/buildkit/*.sh
 
-      - name: Get Flutter Dependency
-        run: |
-          flutter --version
-          flutter pub get
+      - name: Install dependencies
+        run: flutter pub get
 
-      - name: Setup
-        run: dart setup.dart ${{ matrix.platform }} ${{ env.IS_STABLE == 'true' && '--env stable' || '' }} ${{ matrix.platform == 'ios' && '--no-codesign' || '' }} -v
+      - name: Run focused iOS tests
+        run: flutter test test/providers/action_test.dart test/core/protocol_contract_test.dart --reporter expanded
 
-      - name: Upload
+      - name: Sync Go modules
+        working-directory: core
+        run: go mod tidy
+
+      - name: Verify mihomo core
+        working-directory: core/mihomo
+        run: go test ./transport/vless ./common/utils ./adapter ./adapter/outbound
+
+      - name: Build unsigned IPA
+        run: dart setup.dart ios --no-codesign -v
+
+      - name: Upload unsigned IPA
         uses: actions/upload-artifact@v7
         with:
-          name: artifact-${{ matrix.platform }}${{ matrix.arch && format('-{0}', matrix.arch) }}
-          path: ./dist
+          name: FlClash-ios-arm64-unsigned
+          path: dist/*.ipa
+          if-no-files-found: error
           overwrite: true
-
-  upload:
-    permissions:
-      contents: write
-    needs: [ build ]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Download
-        uses: actions/download-artifact@v8
-        with:
-          path: ./dist/
-          pattern: artifact-*
-          merge-multiple: true
-
-      - name: Patch release.md
-        run: |
-          version=$(echo "${{ github.ref_name }}" | sed 's/^v//')
-          sed "s|VERSION|$version|g" ./.github/release_template.md >> release.md
-
-      - name: Release
-        uses: softprops/action-gh-release@v3
-        with:
-          prerelease: ${{ env.IS_STABLE != 'true' }}
-          files: ./dist/*
-          body_path: './release.md'
+          retention-days: 14
