@@ -1,4 +1,4 @@
 [submodule "core/mihomo"]
 	path = core/mihomo
-	url = https://github.com/chenx-dust/mihomo.git
+	url = https://github.com/soosrty/mihomo.git
 	branch = FlClash
