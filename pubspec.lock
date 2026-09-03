@@ -1838,7 +1838,7 @@ packages:
     description:
       path: "packages/window_manager"
       ref: main
-      resolved-ref: "7ddbd876f96fca602670e2110348fbcb387950e9"
+      resolved-ref: "424e115398e9e6afad4e74e26788ece8d7b1fc50"
       url: "https://github.com/chenx-dust/window_manager.git"
     source: git
     version: "0.5.2"
