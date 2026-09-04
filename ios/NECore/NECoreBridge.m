@@ -34,14 +34,19 @@ static char *NECoreCopyData(NSData *data) {
   return copy;
 }
 
-static void NECoreProtect(void *tunInterface, int fd) {}
+static int NECoreProtect(void *tunInterface, int fd) {
+  return 1;
+}
 
-static char *NECoreResolveProcess(
+static int NECoreResolveUid(
     void *tunInterface,
     int protocol,
     const char *source,
-    const char *target,
-    int uid) {
+    const char *target) {
+  return -1;
+}
+
+static char *NECoreResolvePackage(void *tunInterface, int uid) {
   return strdup("");
 }
 
@@ -134,7 +139,8 @@ static void NECoreSystemLog(const char *level, const char *message) {
     retain_object_func = &NECoreRetainObject;
     free_string_func = &NECoreFreeString;
     protect_func = &NECoreProtect;
-    resolve_process_func = &NECoreResolveProcess;
+    resolve_uid_func = &NECoreResolveUid;
+    resolve_package_func = &NECoreResolvePackage;
     result_func = &NECoreResult;
     system_log_func = &NECoreSystemLog;
   });
