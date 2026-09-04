@@ -58,14 +58,14 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
       networkConfiguration.makeSettings(for: vpnOptions)
     ) { error in
       if let error {
-        self.providerFileLog("setTunnelNetworkSettings failed: \(error.localizedDescription)")
+        providerFileLog("setTunnelNetworkSettings failed: \(error.localizedDescription)")
         self.logger.error(
           "setTunnelNetworkSettings failed: \(error.localizedDescription, privacy: .public)"
         )
         completionHandler(error)
         return
       }
-      self.providerFileLog("setTunnelNetworkSettings completed")
+      providerFileLog("setTunnelNetworkSettings completed")
       self.logger.info("setTunnelNetworkSettings completed")
       guard let tunnelFileDescriptor =
         self.networkConfiguration.tunnelFileDescriptor()
@@ -96,14 +96,14 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         {
           let message = String(data: result, encoding: .utf8) ??
             "unknown core error"
-          self.providerFileLog("quickSetup failed: \(message)")
+          providerFileLog("quickSetup failed: \(message)")
           self.logger.error(
             "quickSetup failed: \(message, privacy: .public)"
           )
           completionHandler(PacketTunnelProviderError.couldNotStartCoreTun)
           return
         }
-        self.providerFileLog("quickSetup completed")
+        providerFileLog("quickSetup completed")
         self.logger.info("quickSetup completed")
         let coreTunOptions = CoreTunOptions(
           stack: vpnOptions.stack,
@@ -122,7 +122,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
           withFileDescriptor: tunnelFileDescriptor,
           options: coreTunOptionsData
         )
-        self.providerFileLog("startTun result=\(started)")
+        providerFileLog("startTun result=\(started)")
         self.logger.info(
           "NECoreBridge.startTun result=\(started, privacy: .public)"
         )

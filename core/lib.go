@@ -253,7 +253,9 @@ func quickSetup(callback unsafe.Pointer, initParamsChar *C.char, setupParamsChar
 		// Configuration changes are handled by setupConfig/updateConfig.
 		if isInit.Load() {
 			constant.DefaultTestURL = setupParams.TestURL
-			isRunning = true
+			if !isRunning {
+				handleStartListener()
+			}
 			writeSystemLog("warning", "quickSetup reused initialized core")
 			invokeResult(callback, "")
 			return
