@@ -345,10 +345,10 @@ Future<int> packageIOSNoSign({
     '--dart-define-from-file=env.json',
   ], workingDirectory: rootDir);
   process.stdout.listen((data) {
-    stdout.write(systemEncoding.decode(data));
+    stdout.add(data);
   });
   process.stderr.listen((data) {
-    stderr.write(systemEncoding.decode(data));
+    stderr.add(data);
   });
   final buildExit = await process.exitCode;
   if (buildExit != 0) return buildExit;
