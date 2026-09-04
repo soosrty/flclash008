@@ -76,6 +76,8 @@ func handleInitClash(params *InitParams) bool {
 	defer runLock.Unlock()
 	version = params.Version
 	constant.SetHomeDir(params.HomeDir)
+	// expose the home dir to the NE file logger
+	os.Setenv("CLASH_HOME_DIR", params.HomeDir)
 	constant.Path.MMDB()
 	constant.Path.ASN()
 	constant.Path.GeoIP()

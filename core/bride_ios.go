@@ -33,6 +33,9 @@ func writeSystemLog(level, message string) {
 	m := C.CString(message)
 	defer C.free(unsafe.Pointer(m))
 	C.system_log(l, m)
+	// Also append to a file inside the app-group so NE failures can be
+	// diagnosed without a Mac (capped at ~1MB).
+	neCoreFileLog(level, message)
 }
 
 func releaseObject(callback unsafe.Pointer) {
