@@ -146,7 +146,7 @@ func handleStartTun(callback unsafe.Pointer, fd int, options t.Options) bool {
 	tunLock.Lock()
 	defer tunLock.Unlock()
 	if fd == 0 {
-		return
+		return false
 	}
 	tunHandler = &TunHandler{
 		callback: callback,
