@@ -19,14 +19,19 @@ static void IOSCoreFreeString(char *data) {
   free(data);
 }
 
-static void IOSCoreProtect(void *tunInterface, int fd) {}
+static int IOSCoreProtect(void *tunInterface, int fd) {
+  return 1;
+}
 
-static char *IOSCoreResolveProcess(
+static int IOSCoreResolveUid(
     void *tunInterface,
     int protocol,
     const char *source,
-    const char *target,
-    int uid) {
+    const char *target) {
+  return -1;
+}
+
+static char *IOSCoreResolvePackage(void *tunInterface, int uid) {
   return strdup("");
 }
 
@@ -91,7 +96,8 @@ static void IOSCoreSystemLog(const char *level, const char *message) {
     retain_object_func = &IOSCoreRetainObject;
     free_string_func = &IOSCoreFreeString;
     protect_func = &IOSCoreProtect;
-    resolve_process_func = &IOSCoreResolveProcess;
+    resolve_uid_func = &IOSCoreResolveUid;
+    resolve_package_func = &IOSCoreResolvePackage;
     result_func = &IOSCoreResult;
     system_log_func = &IOSCoreSystemLog;
   });
