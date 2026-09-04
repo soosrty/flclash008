@@ -27,15 +27,15 @@ func Start(fd int, config Options) *sing_tun.Listener {
 
 	var prefix4 []netip.Prefix
 	var prefix6 []netip.Prefix
-	for _, a := range strings.Split(config.Address, ",") {
-		a = strings.TrimSpace(a)
-		if len(a) == 0 {
+	for _, address := range strings.Split(config.Address, ",") {
+		address = strings.TrimSpace(address)
+		if address == "" {
 			continue
 		}
-		prefix, err := netip.ParsePrefix(a)
-		if err != nil {
+		prefix, parseErr := netip.ParsePrefix(address)
+		if parseErr != nil {
 			_ = syscall.Close(tunFd)
-			log.Errorln("TUN:", err)
+			log.Errorln("TUN: %v", parseErr)
 			return nil
 		}
 		if prefix.Addr().Is4() {
@@ -46,12 +46,12 @@ func Start(fd int, config Options) *sing_tun.Listener {
 	}
 
 	var dnsHijack []string
-	for _, d := range strings.Split(config.DNS, ",") {
-		d = strings.TrimSpace(d)
-		if len(d) == 0 {
+	for _, address := range strings.Split(config.DNS, ",") {
+		address = strings.TrimSpace(address)
+		if address == "" {
 			continue
 		}
-		dnsHijack = append(dnsHijack, net.JoinHostPort(d, "53"))
+		dnsHijack = append(dnsHijack, net.JoinHostPort(address, "53"))
 	}
 
 	options := LC.Tun{
@@ -77,9 +77,8 @@ func Start(fd int, config Options) *sing_tun.Listener {
 	listener, err := sing_tun.New(options, tunnel.Tunnel)
 	if err != nil {
 		_ = syscall.Close(tunFd)
-		log.Errorln("TUN:", err)
+		log.Errorln("TUN: %v", err)
 		return nil
 	}
-
 	return listener
 }

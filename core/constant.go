@@ -1,25 +1,23 @@
 package main
 
 import (
-	"encoding/json"
-	"net/netip"
-	"time"
-
 	"github.com/metacubex/mihomo/adapter/provider"
 	P "github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/tunnel"
+	"net/netip"
+	"time"
 )
-
-type DecryptAgeConfigParams struct {
-	Data         string `json:"data"`
-	AgeSecretKey string `json:"age-secret-key"`
-}
 
 type InitParams struct {
 	HomeDir string `json:"home-dir"`
 	Version int    `json:"version"`
+}
+
+type DecryptAgeConfigParams struct {
+	Data         string `json:"data"`
+	AgeSecretKey string `json:"age-secret-key"`
 }
 
 type ManagedPathScope string
@@ -48,25 +46,25 @@ type UpdateParams struct {
 	Mode               *tunnel.TunnelMode `json:"mode"`
 	LogLevel           *log.LogLevel      `json:"log-level"`
 	IPv6               *bool              `json:"ipv6"`
-	Sniffing           *bool              `json:"sniffing"`
 	TCPConcurrent      *bool              `json:"tcp-concurrent"`
 	ExternalController *string            `json:"external-controller"`
-	Interface          *string            `json:"interface-name"`
 	UnifiedDelay       *bool              `json:"unified-delay"`
 	GeoAutoUpdate      *bool              `json:"geo-auto-update"`
 	GeoUpdateInterval  *int               `json:"geo-update-interval"`
 }
 
 type tunSchema struct {
-	Enable                 bool               `yaml:"enable" json:"enable"`
-	Device                 *string            `yaml:"device" json:"device"`
-	Stack                  *constant.TUNStack `yaml:"stack" json:"stack"`
-	DNSHijack              *[]string          `yaml:"dns-hijack" json:"dns-hijack"`
-	AutoRoute              *bool              `yaml:"auto-route" json:"auto-route"`
-	RouteAddress           *[]netip.Prefix    `yaml:"route-address" json:"route-address,omitempty"`
-	StrictRoute            *bool              `yaml:"strict-route" json:"strict-route,omitempty"`
-	DisableICMPForwarding  *bool              `yaml:"disable-icmp-forwarding" json:"disable-icmp-forwarding,omitempty"`
-	EndpointIndependentNAT *bool              `yaml:"endpoint-independent-nat" json:"endpoint-independent-nat,omitempty"`
+	Enable       bool               `yaml:"enable" json:"enable"`
+	Device       *string            `yaml:"device" json:"device"`
+	Stack        *constant.TUNStack `yaml:"stack" json:"stack"`
+	DNSHijack    *[]string          `yaml:"dns-hijack" json:"dns-hijack"`
+	AutoRoute    *bool              `yaml:"auto-route" json:"auto-route"`
+	RouteAddress *[]netip.Prefix    `yaml:"route-address" json:"route-address,omitempty"`
+}
+
+type SideLoadParams struct {
+	ProviderName string `json:"providerName"`
+	Data         string `json:"data"`
 }
 
 type ChangeProxyParams struct {
@@ -217,7 +215,6 @@ const (
 	activateOverlayNetworkMethod         CoreMethod = "activateOverlayNetwork"
 	pingTailscaleNodeMethod              CoreMethod = "pingTailscaleNode"
 	logoutTailscaleMethod                CoreMethod = "logoutTailscale"
-	getCountryCodeMethod                 CoreMethod = "getCountryCode"
 	getMemoryMethod                      CoreMethod = "getMemory"
 	getGoroutineCountMethod              CoreMethod = "getGoroutineCount"
 	updateGeoDataMethod                  CoreMethod = "updateGeoData"
@@ -232,8 +229,8 @@ const (
 	updateDnsMethod                      CoreMethod = "updateDns"
 	crashMethod                          CoreMethod = "crash"
 	setupConfigMethod                    CoreMethod = "setupConfig"
-	clearEffectMethod                    CoreMethod = "clearEffect"
 	getProfileConfigMethod               CoreMethod = "getProfileConfig"
+	clearEffectMethod                    CoreMethod = "clearEffect"
 	deleteManagedPathMethod              CoreMethod = "deleteManagedPath"
 	generateAgeKeyPairMethod             CoreMethod = "generateAgeKeyPair"
 	convertAgeSecretKeyToPublicKeyMethod CoreMethod = "convertAgeSecretKeyToPublicKey"
@@ -279,7 +276,7 @@ type Delay struct {
 
 type Message struct {
 	Type MessageType `json:"type"`
-	Data interface{} `json:"data"`
+	Data any         `json:"data"`
 }
 
 const (
@@ -295,9 +292,4 @@ type GeoUpdateStatus struct {
 	Updating bool   `json:"updating"`
 	Skipped  bool   `json:"skipped,omitempty"`
 	Error    string `json:"error,omitempty"`
-}
-
-func (message *Message) Json() (string, error) {
-	data, err := json.Marshal(message)
-	return string(data), err
 }
