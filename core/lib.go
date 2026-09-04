@@ -29,6 +29,7 @@ import (
 var (
 	eventListenerMu sync.RWMutex
 	eventListener   unsafe.Pointer
+	quickSetupMu    sync.Mutex
 )
 
 type TunHandler struct {
@@ -140,18 +141,19 @@ func handleStopTun() {
 	}
 }
 
-func handleStartTun(callback unsafe.Pointer, fd int, options t.Options) {
+func handleStartTun(callback unsafe.Pointer, fd int, options t.Options) bool {
 	handleStopTun()
 	tunLock.Lock()
 	defer tunLock.Unlock()
-	if fd != 0 {
-		tunHandler = &TunHandler{
-			callback: callback,
-			limit:    semaphore.NewWeighted(4),
-		}
-		tunHandler.start(fd, options)
+	if fd == 0 {
+		return
 	}
-	return
+	tunHandler = &TunHandler{
+		callback: callback,
+		limit:    semaphore.NewWeighted(4),
+	}
+	tunHandler.start(fd, options)
+	return tunHandler.listener != nil
 }
 
 func (response MethodResponse) send() {
@@ -218,7 +220,10 @@ func startTUN(callback unsafe.Pointer, fd C.int, optionsChar *C.char) bool {
 		}
 		return false
 	}
-	handleStartTun(callback, int(fd), options)
+	started := handleStartTun(callback, int(fd), options)
+	if !started {
+		return false
+	}
 	if !isRunning {
 		handleStartListener()
 	} else {
@@ -231,19 +236,35 @@ func startTUN(callback unsafe.Pointer, fd C.int, optionsChar *C.char) bool {
 func quickSetup(callback unsafe.Pointer, initParamsChar *C.char, setupParamsChar *C.char) {
 	go func() {
 		defer releaseObject(callback)
+		quickSetupMu.Lock()
+		defer quickSetupMu.Unlock()
+
 		initParamsString := takeCString(initParamsChar)
 		setupParamsString := takeCString(setupParamsChar)
+		setupParams := defaultSetupParams()
+		if err := UnmarshalJson([]byte(setupParamsString), setupParams); err != nil {
+			invokeResult(callback, err.Error())
+			return
+		}
+
+		// startTunnel can be called again while the same NE process is still
+		// alive. Do not re-parse and re-apply the full config in that case:
+		// doing so tears down DNS/providers while the existing TUN is active.
+		// Configuration changes are handled by setupConfig/updateConfig.
+		if isInit.Load() {
+			constant.DefaultTestURL = setupParams.TestURL
+			isRunning = true
+			writeSystemLog("warning", "quickSetup reused initialized core")
+			invokeResult(callback, "")
+			return
+		}
+
 		initParams := InitParams{}
 		if err := json.Unmarshal([]byte(initParamsString), &initParams); err != nil || !handleInitClash(&initParams) {
 			invokeResult(callback, "init failed")
 			return
 		}
 		isRunning = true
-		setupParams := defaultSetupParams()
-		if err := UnmarshalJson([]byte(setupParamsString), setupParams); err != nil {
-			invokeResult(callback, err.Error())
-			return
-		}
 		message := handleSetupConfig(setupParams)
 		invokeResult(callback, message)
 	}()

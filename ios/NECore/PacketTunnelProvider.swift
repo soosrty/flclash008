@@ -3,6 +3,25 @@ import NetworkExtension
 import WidgetKit
 import os
 
+private let providerFileLogLock = NSLock()
+private func providerFileLog(_ message: String) {
+  providerFileLogLock.lock()
+  defer { providerFileLogLock.unlock() }
+  guard let container = FileManager.default.containerURL(
+    forSecurityApplicationGroupIdentifier: PacketTunnelEnvironment.appGroupIdentifier
+  ) else { return }
+  let url = container.appendingPathComponent("ne-provider.log")
+  let line = "\(Date()) [pid=\(ProcessInfo.processInfo.processIdentifier)] \(message)\n"
+  guard let data = line.data(using: .utf8) else { return }
+  if let handle = try? FileHandle(forWritingTo: url) {
+    handle.seekToEndOfFile()
+    handle.write(data)
+    try? handle.close()
+  } else {
+    try? data.write(to: url)
+  }
+}
+
 final class PacketTunnelProvider: NEPacketTunnelProvider {
   private let sharedStateStore = PacketTunnelSharedStateStore()
   private let networkConfiguration = PacketTunnelNetworkConfiguration()
@@ -20,6 +39,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     options: [String: NSObject]?,
     completionHandler: @escaping (Error?) -> Void
   ) {
+    providerFileLog("startTunnel begin")
     logger.info("startTunnel begin")
     sharedStateStore.clearRunTime()
     reloadControlWidget()
@@ -28,6 +48,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
       completionHandler(PacketTunnelProviderError.missingVPNOptions)
       return
     }
+    providerFileLog("startTunnel options stack=\(vpnOptions.stack) ipv6=\(vpnOptions.ipv6) captureDns=\(vpnOptions.captureDns) systemProxy=\(vpnOptions.systemProxy) suspendSupport=\(vpnOptions.suspendSupport)")
     logger.info(
       "startTunnel options stack=\(vpnOptions.stack, privacy: .public) ipv6=\(vpnOptions.ipv6, privacy: .public) captureDns=\(vpnOptions.captureDns, privacy: .public) systemProxy=\(vpnOptions.systemProxy, privacy: .public) suspendSupport=\(vpnOptions.suspendSupport, privacy: .public)"
     )
@@ -37,12 +58,14 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
       networkConfiguration.makeSettings(for: vpnOptions)
     ) { error in
       if let error {
+        self.providerFileLog("setTunnelNetworkSettings failed: \(error.localizedDescription)")
         self.logger.error(
           "setTunnelNetworkSettings failed: \(error.localizedDescription, privacy: .public)"
         )
         completionHandler(error)
         return
       }
+      self.providerFileLog("setTunnelNetworkSettings completed")
       self.logger.info("setTunnelNetworkSettings completed")
       guard let tunnelFileDescriptor =
         self.networkConfiguration.tunnelFileDescriptor()
@@ -73,12 +96,14 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         {
           let message = String(data: result, encoding: .utf8) ??
             "unknown core error"
+          self.providerFileLog("quickSetup failed: \(message)")
           self.logger.error(
             "quickSetup failed: \(message, privacy: .public)"
           )
           completionHandler(PacketTunnelProviderError.couldNotStartCoreTun)
           return
         }
+        self.providerFileLog("quickSetup completed")
         self.logger.info("quickSetup completed")
         let coreTunOptions = CoreTunOptions(
           stack: vpnOptions.stack,
@@ -97,6 +122,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
           withFileDescriptor: tunnelFileDescriptor,
           options: coreTunOptionsData
         )
+        self.providerFileLog("startTun result=\(started)")
         self.logger.info(
           "NECoreBridge.startTun result=\(started, privacy: .public)"
         )
@@ -114,6 +140,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     with reason: NEProviderStopReason,
     completionHandler: @escaping () -> Void
   ) {
+    providerFileLog("stopTunnel reason=\(reason.rawValue)")
     logger.info("stopTunnel reason=\(reason.rawValue, privacy: .public)")
     sharedStateStore.clearRunTime()
     reloadControlWidget()
