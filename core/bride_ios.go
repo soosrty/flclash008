@@ -4,38 +4,28 @@ package main
 
 //#include "bride.h"
 import "C"
-import (
-	"unsafe"
-)
+import "unsafe"
 
-func protect(callback unsafe.Pointer, fd int) {
-	C.protect(callback, C.int(fd))
+func protect(callback unsafe.Pointer, fd int) bool {
+	return C.protect(callback, C.int(fd)) != 0
 }
 
-func resolveProcess(callback unsafe.Pointer, protocol int, source, target string, uid int) string {
+func resolveUid(callback unsafe.Pointer, protocol int, source, target string) int {
 	s := C.CString(source)
 	defer C.free(unsafe.Pointer(s))
 	t := C.CString(target)
 	defer C.free(unsafe.Pointer(t))
-	res := C.resolve_process(callback, C.int(protocol), s, t, C.int(uid))
-	return takeCString(res)
+	return int(C.resolve_uid(callback, C.int(protocol), s, t))
+}
+
+func resolvePackage(callback unsafe.Pointer, uid int) string {
+	return takeCString(C.resolve_package(callback, C.int(uid)))
 }
 
 func invokeResult(callback unsafe.Pointer, data string) {
 	s := C.CString(data)
 	defer C.free(unsafe.Pointer(s))
 	C.result(callback, s)
-}
-
-func writeSystemLog(level, message string) {
-	l := C.CString(level)
-	defer C.free(unsafe.Pointer(l))
-	m := C.CString(message)
-	defer C.free(unsafe.Pointer(m))
-	C.system_log(l, m)
-	// Also append to a file inside the app-group so NE failures can be
-	// diagnosed without a Mac (capped at ~1MB).
-	neCoreFileLog(level, message)
 }
 
 func releaseObject(callback unsafe.Pointer) {
@@ -46,10 +36,18 @@ func retainObject(callback unsafe.Pointer) unsafe.Pointer {
 	return C.retain_object(callback)
 }
 
-func takeCString(s *C.char) string {
-	defer C.free_string(s)
-	return C.GoString(s)
+func writeSystemLog(level, message string) {
+	l := C.CString(level)
+	defer C.free(unsafe.Pointer(l))
+	m := C.CString(message)
+	defer C.free(unsafe.Pointer(m))
+	C.system_log(l, m)
 }
 
 func handleUpdateDns(value string) {
+}
+
+func takeCString(s *C.char) string {
+	defer C.free_string(s)
+	return C.GoString(s)
 }
