@@ -119,40 +119,12 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     reloadControlWidget()
     eventQueue.stop()
     NECoreBridge.stopTun()
-    guard reason == .userInitiated else {
-      completionHandler()
-      return
-    }
-    NETunnelProviderManager.loadAllFromPreferences { managers, error in
-      if let error {
-        self.logger.error(
-          "stopTunnel loadAllFromPreferences error=\(error.localizedDescription, privacy: .public)"
-        )
-        completionHandler()
-        return
-      }
-      guard let manager = managers?.first(where: { manager in
-        guard let proto = manager.protocolConfiguration
-          as? NETunnelProviderProtocol
-        else {
-          return false
-        }
-        return proto.providerBundleIdentifier ==
-          PacketTunnelEnvironment.extensionBundleIdentifier
-      }) else {
-        completionHandler()
-        return
-      }
-      manager.isOnDemandEnabled = false
-      manager.saveToPreferences { error in
-        if let error {
-          self.logger.error(
-            "stopTunnel saveToPreferences error=\(error.localizedDescription, privacy: .public)"
-          )
-        }
-        completionHandler()
-      }
-    }
+    // The Network Extension process must not load or mutate
+    // NETunnelProviderManager preferences while stopping. On iOS 16.3.1,
+    // NETunnelProviderManager.loadAllFromPreferences can throw an Objective-C
+    // exception inside the extension process and abort NECore. Manager and
+    // on-demand preference changes belong to the containing app.
+    completionHandler()
   }
 
   override func handleAppMessage(
