@@ -112,9 +112,13 @@ final class ServiceChannel {
         result(false)
         return
       }
+      // Claim the Network Extension route before the tunnel reports .running,
+      // so a profile applied during startup is not loaded by the app core too.
+      coreMessageRouter.setDesiredTunnelState(.running)
       tunnelController.start()
       result(true)
     case "stop":
+      coreMessageRouter.setDesiredTunnelState(.stopped)
       tunnelController.stop()
       result(true)
     case "init":

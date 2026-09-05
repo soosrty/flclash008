@@ -32,6 +32,17 @@ private struct CoreRoutingError: LocalizedError {
 final class CoreMessageRouter {
   private let tunnelController: TunnelController
   private var currentRoute = CoreRoute.app
+  // The observed NEVPNStatus lags the request: startTunnel and the Dart-side
+  // applyProfile run concurrently, so at the moment the first setupConfig
+  // arrives the tunnel usually still reports .stopped. Routing configuration on
+  // the observed state alone therefore let the app core load the profile once
+  // more, in parallel with the extension. desiredTunnelState records the
+  // requested target so config ownership moves to the extension immediately,
+  // and is cleared once the tunnel actually reports that state.
+  private var desiredTunnelState: TunnelTarget?
+  /// The last setupConfig call that was routed to the Network Extension only.
+  /// Replayed into the app core when ownership returns to the app.
+  private var lastConfigurationMessage: Data?
   private lazy var notificationCoordinator = CoreNotificationCoordinator(
     sendMessage: { [weak self] data, route in
       guard let self else {
@@ -53,8 +64,59 @@ final class CoreMessageRouter {
   }
 
   func updateTunnelState(_ state: TunnelTarget) {
-    currentRoute = state == .running ? .networkExtension : .app
-    notificationCoordinator.setDesiredRoute(currentRoute)
+    // An explicit start/stop intent wins over the observed state until the
+    // tunnel actually reaches it. Otherwise a profile applied while the tunnel
+    // is still connecting would be routed to the app core, and both cores would
+    // end up owning the same profile.
+    if let intent = desiredTunnelState, intent != state {
+      return
+    }
+    desiredTunnelState = nil
+    setRoute(state == .running ? .networkExtension : .app)
+  }
+
+  /// Called as soon as the app asks for the tunnel to start or stop, before the
+  /// Network Extension reports its new status.
+  func setDesiredTunnelState(_ state: TunnelTarget) {
+    desiredTunnelState = state
+    setRoute(state == .running ? .networkExtension : .app)
+  }
+
+  private func setRoute(_ route: CoreRoute) {
+    guard currentRoute != route else {
+      return
+    }
+    currentRoute = route
+    log("route=\(route == .networkExtension ? "networkExtension" : "app")")
+    notificationCoordinator.setDesiredRoute(route)
+    guard route == .app else {
+      return
+    }
+    // While the extension owned the profile the app core was deliberately left
+    // out, so it still holds whatever config predates the tunnel. Replay the
+    // last applied setup so queries served from the app core (proxy groups,
+    // delay tests) do not answer from a stale profile.
+    replayConfigurationIntoAppCore()
+  }
+
+  private func replayConfigurationIntoAppCore() {
+    guard let data = lastConfigurationMessage else {
+      return
+    }
+    lastConfigurationMessage = nil
+    Task { [weak self] in
+      guard let self else {
+        return
+      }
+      do {
+        _ = try await self.sendCoreMessage(data, route: .app)
+        self.log("replayed setupConfig into app core")
+      } catch {
+        self.log(
+          "replay setupConfig failed: \(error.localizedDescription)"
+        )
+      }
+    }
   }
 
   func invoke(_ data: Data) async -> String {
@@ -226,36 +288,40 @@ final class CoreMessageRouter {
     method: ConfigurationCoreMethod,
     networkExtensionActive: Bool
   ) async throws -> String {
-    let appData: Data
-    if networkExtensionActive && method == .updateConfig {
-      appData = try replacingArgument(
-        in: data,
-        key: "external-controller",
-        with: ""
-      )
-    } else {
-      appData = data
+    // Single-core ownership: while the Network Extension is running it is the
+    // only process that may load a profile. Applying the same config in the app
+    // core too meant both processes ran hub.ApplyConfig, loaded every provider
+    // and dialled every node, which is what produced the duplicated
+    // "Start initial configuration" bursts and the reconnect loop.
+    if networkExtensionActive {
+      let networkExtensionData = method == .updateConfig
+        ? try replacingArgument(
+          in: data,
+          key: "geo-auto-update",
+          with: false
+        )
+        : data
+      if method == .setupConfig {
+        lastConfigurationMessage = data
+      }
+      do {
+        return try await sendCoreMessage(
+          networkExtensionData,
+          route: .networkExtension
+        )
+      } catch let error as ProviderMessageError
+        where error.code == "network_extension_unavailable"
+      {
+        // The tunnel has been asked to start but has not reached .running yet.
+        // The extension reads setupParams from the App Group and applies the
+        // profile itself in startTunnel, so there is nothing to do here — and
+        // falling back to the app core would load the same profile twice.
+        log("\(method.rawValue) deferred to Network Extension startup")
+        return emptyStringResultResponse(data: data)
+      }
     }
 
-    let appResponse = try await sendCoreMessage(appData, route: .app)
-    guard networkExtensionActive,
-      currentRoute == .networkExtension,
-      methodResponseHasEmptyStringResult(appResponse)
-    else {
-      return appResponse
-    }
-
-    let networkExtensionData = method == .updateConfig
-      ? try replacingArgument(
-        in: data,
-        key: "geo-auto-update",
-        with: false
-      )
-      : data
-    return try await sendCoreMessage(
-      networkExtensionData,
-      route: .networkExtension
-    )
+    return try await sendCoreMessage(data, route: .app)
   }
 
   private func sendCoreMessage(
@@ -369,6 +435,25 @@ final class CoreMessageRouter {
       return nil
     }
     return object["id"] as? String
+  }
+
+  /// A successful method response carrying an empty string result, which is how
+  /// the core reports "config applied, no error".
+  private func emptyStringResultResponse(data: Data?) -> String {
+    var payload: [String: Any] = [
+      "result": "",
+      "error": NSNull(),
+    ]
+    if let id = methodCallID(data) {
+      payload["id"] = id
+    }
+    guard
+      let responseData = try? JSONSerialization.data(withJSONObject: payload),
+      let response = String(data: responseData, encoding: .utf8)
+    else {
+      return #"{"result":"","error":null}"#
+    }
+    return response
   }
 
   private func methodErrorResponse(
