@@ -71,7 +71,9 @@ func Start(fd int, config Options) *sing_tun.Listener {
 			netip.MustParseAddr("10.7.0.1"),
 		},
 		RecvMsgX: true,
-		SendMsgX: true,
+		// sing-tun documents that SendMsgX can freeze during concurrent
+		// downloads on Darwin. Keep the safe default for iOS NetworkExtension.
+		SendMsgX: false,
 	}
 
 	listener, err := sing_tun.New(options, tunnel.Tunnel)
