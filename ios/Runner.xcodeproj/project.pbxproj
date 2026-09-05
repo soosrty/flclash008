@@ -218,7 +218,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				059852A62FF20A1200620D82 /* NetworkExtension.framework in Frameworks */,
-				7891A0092FF2A10100620D82 /* libclash_lowmem.a in Frameworks */,
+				7891A0062FF2361D00620D82 /* libclash.a in Frameworks */,
 				7891A00A2FF2A10100620D82 /* libresolv.tbd in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
